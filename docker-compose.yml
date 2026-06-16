@@ -1,0 +1,110 @@
+x-chatwoot: &chatwoot
+  # Pinear a una release concreta en producción (ver https://github.com/chatwoot/chatwoot/releases)
+  image: chatwoot/chatwoot:latest
+  env_file: .env
+  volumes:
+    - storage:/app/storage
+  restart: unless-stopped
+
+services:
+  # ---------- Datos: Postgres (compartido Chatwoot + bot) ----------
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Crea la base 'oasisbot' además de la de Chatwoot (solo en el primer arranque)
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- Cola interna de Chatwoot ----------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    env_file: .env
+    command: sh -c 'redis-server --requirepass "$$REDIS_PASSWORD"'
+    volumes:
+      - redis_data:/data
+
+  # ---------- Chatwoot: servidor web ----------
+  rails:
+    <<: *chatwoot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      # Solo accesible desde el VPS; al exterior lo expone Caddy con HTTPS
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+    entrypoint: docker/entrypoints/rails.sh
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+
+  # ---------- Chatwoot: worker de fondo ----------
+  sidekiq:
+    <<: *chatwoot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+
+  # ---------- Bot de Hierbas del Oasis (Agent Bot de Chatwoot) ----------
+  # No expone puertos al exterior: Chatwoot lo alcanza por la red interna
+  # como http://bot:3000  (se desarrolla en la Fase 2; por ahora es un stub)
+  bot:
+    build: ./bot
+    # Loopback del host (127.0.0.1): para probar el bot localmente; nunca público.
+    ports:
+      - "127.0.0.1:3001:3000"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+
+  # ---------- Reverse proxy + HTTPS automático ----------
+  caddy:
+    image: caddy:2-alpine
+    # Solo en producción. En local NO se levanta (HTTPS necesita dominio público).
+    # Para producción: docker compose --profile prod up -d
+    profiles: ["prod"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - CHATWOOT_DOMAIN=${CHATWOOT_DOMAIN}
+      - ACME_EMAIL=${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - rails
+
+volumes:
+  storage:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

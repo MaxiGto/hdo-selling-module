@@ -1,0 +1,9 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# Chatwoot servido con HTTPS automático (Let's Encrypt).
+# El bot NO se publica: Chatwoot lo alcanza por la red interna (http://bot:3000).
+{$CHATWOOT_DOMAIN} {
+	reverse_proxy rails:3000
+}

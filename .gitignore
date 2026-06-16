@@ -1,0 +1,9 @@
+# Secretos / entorno
+.env
+
+# Node
+**/node_modules
+bot/dist
+
+# Logs
+*.log
