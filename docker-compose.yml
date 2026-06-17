@@ -80,6 +80,9 @@ services:
         condition: service_healthy
     environment:
       - NODE_ENV=production
+      # DATABASE_URL del bot se define ACÁ (no en .env), para que NO lo herede
+      # Chatwoot: Rails le da prioridad a DATABASE_URL y migraría en la base equivocada.
+      - DATABASE_URL=postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@postgres:5432/oasisbot
     restart: unless-stopped
 
   # ---------- Reverse proxy + HTTPS automático ----------

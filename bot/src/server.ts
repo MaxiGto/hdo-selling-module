@@ -1,27 +1,20 @@
 import express from "express";
-
-// Stub mínimo para validar la infraestructura (Fase 1).
-// La lógica real (recepción, idempotencia, agente IA, escalado) llega en la Fase 2.
+import { config, warnMissingConfig } from "./config.js";
+import { handleChatwootWebhook } from "./controllers/webhookController.js";
 
 const app = express();
 app.use(express.json());
-
-const PORT = Number(process.env.PORT ?? 3000);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "oasis-whatsapp-bot" });
 });
 
-// Webhook del Agent Bot de Chatwoot (placeholder)
-app.post("/chatwoot/webhook", (req, res) => {
-  console.log("[webhook] evento:", JSON.stringify(req.body));
-  res.sendStatus(200);
-});
+// Webhook del Agent Bot de Chatwoot: recibe mensajes y responde con el agente IA.
+app.post("/chatwoot/webhook", handleChatwootWebhook);
 
-// --- Debug: webhook directo de Meta (para confirmar que llegan las requests) ---
+// --- Debug: webhook directo de Meta (solo para diagnóstico, no se usa en el flujo real) ---
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN ?? "oasis-verify-token";
 
-// Verificación (GET): Meta espera que devolvamos el hub.challenge
 app.get("/meta/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -34,12 +27,12 @@ app.get("/meta/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
-// Eventos entrantes (POST): logueamos el payload completo
 app.post("/meta/webhook", (req, res) => {
   console.log("[meta] evento recibido:\n", JSON.stringify(req.body, null, 2));
   res.sendStatus(200);
 });
 
-app.listen(PORT, () => {
-  console.log(`oasis-whatsapp-bot escuchando en :${PORT}`);
+app.listen(config.port, () => {
+  console.log(`oasis-whatsapp-bot escuchando en :${config.port}`);
+  warnMissingConfig();
 });

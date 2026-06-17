@@ -9,6 +9,7 @@
     "dev": "tsx watch src/server.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
     "express": "^4.19.2"
   },
   "devDependencies": {
