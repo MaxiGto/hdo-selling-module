@@ -1,6 +1,7 @@
 x-chatwoot: &chatwoot
-  # Pinear a una release concreta en producción (ver https://github.com/chatwoot/chatwoot/releases)
-  image: chatwoot/chatwoot:latest
+  # Versión pineada (releases: https://github.com/chatwoot/chatwoot/releases).
+  # Subir de versión a conciencia: cambiar el tag, leer el changelog y reiniciar.
+  image: chatwoot/chatwoot:v4.14.2
   env_file: .env
   volumes:
     - storage:/app/storage
