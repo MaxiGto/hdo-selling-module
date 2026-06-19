@@ -12,7 +12,7 @@ if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
 
 echo "==> Actualizando el sistema..."
 $SUDO apt-get update -y
-$SUDO DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+DEBIAN_FRONTEND=noninteractive $SUDO apt-get upgrade -y
 
 echo "==> Instalando dependencias base..."
 $SUDO apt-get install -y ca-certificates curl git ufw
