@@ -3,11 +3,14 @@ import { config } from "../config.js";
 // Cliente de la API de Chatwoot. Todo lo saliente pasa por acá,
 // nunca directo a Meta (ver decisión de arquitectura del proyecto).
 
-function chatwootHeaders() {
-  return {
-    "Content-Type": "application/json",
-    api_access_token: config.chatwoot.accessToken,
-  };
+// Token del Agent Bot: para respuestas reactivas (webhook).
+function botHeaders() {
+  return { "Content-Type": "application/json", api_access_token: config.chatwoot.accessToken };
+}
+
+// Token de agente/admin: para crear contactos, conversaciones y enviar templates salientes.
+function agentHeaders() {
+  return { "Content-Type": "application/json", api_access_token: config.chatwoot.agentToken };
 }
 
 function accountUrl(path: string): string {
@@ -23,7 +26,7 @@ export async function sendMessage(
 ): Promise<void> {
   const res = await fetch(accountUrl(`/conversations/${conversationId}/messages`), {
     method: "POST",
-    headers: chatwootHeaders(),
+    headers: botHeaders(),
     body: JSON.stringify({ content, message_type: "outgoing" }),
   });
   if (!res.ok) throw new Error(`sendMessage falló (${res.status}): ${await res.text()}`);
@@ -39,7 +42,7 @@ export async function findOrCreateContact(
   // Buscar primero por teléfono
   const searchRes = await fetch(
     accountUrl(`/contacts/search?q=${encodeURIComponent(phone)}&page=1`),
-    { headers: chatwootHeaders() },
+    { headers: agentHeaders() },
   );
   if (searchRes.ok) {
     const data = (await searchRes.json()) as { payload: { id: number }[] };
@@ -49,7 +52,7 @@ export async function findOrCreateContact(
   // Crear si no existe
   const createRes = await fetch(accountUrl("/contacts"), {
     method: "POST",
-    headers: chatwootHeaders(),
+    headers: agentHeaders(),
     body: JSON.stringify({ name, phone_number: phone, inbox_id: config.chatwoot.inboxId }),
   });
   if (!createRes.ok) throw new Error(`createContact falló (${createRes.status}): ${await createRes.text()}`);
@@ -64,7 +67,7 @@ export async function createConversation(
 ): Promise<number> {
   const res = await fetch(accountUrl(`/contacts/${contactId}/conversations`), {
     method: "POST",
-    headers: chatwootHeaders(),
+    headers: agentHeaders(),
     body: JSON.stringify({ inbox_id: inboxId }),
   });
   if (!res.ok) throw new Error(`createConversation falló (${res.status}): ${await res.text()}`);
@@ -80,7 +83,7 @@ export async function sendTemplateMessage(
 ): Promise<void> {
   const res = await fetch(accountUrl(`/conversations/${conversationId}/messages`), {
     method: "POST",
-    headers: chatwootHeaders(),
+    headers: agentHeaders(),
     body: JSON.stringify({
       message_type: "outgoing",
       content_type: "text",

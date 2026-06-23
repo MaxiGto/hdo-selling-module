@@ -7,7 +7,11 @@ export const config = {
   model: "claude-haiku-4-5",
   chatwoot: {
     baseUrl: process.env.CHATWOOT_BASE_URL ?? "http://rails:3000",
+    // Token del Agent Bot — solo para respuestas reactivas (webhook).
     accessToken: process.env.CHATWOOT_API_ACCESS_TOKEN ?? "",
+    // Token de un agente/admin — necesario para crear contactos, conversaciones y enviar templates.
+    // Obtenelo en Chatwoot → Profile → Access Token.
+    agentToken: process.env.CHATWOOT_AGENT_TOKEN ?? "",
     accountId: process.env.CHATWOOT_ACCOUNT_ID ?? "",
     // ID del inbox de WhatsApp (ver: Chatwoot → Settings → Inboxes).
     inboxId: Number(process.env.CHATWOOT_INBOX_ID ?? 1),
@@ -24,6 +28,7 @@ export function warnMissingConfig(): void {
   const missing: string[] = [];
   if (!config.anthropicApiKey)       missing.push("ANTHROPIC_API_KEY");
   if (!config.chatwoot.accessToken)  missing.push("CHATWOOT_API_ACCESS_TOKEN");
+  if (!config.chatwoot.agentToken)   missing.push("CHATWOOT_AGENT_TOKEN");
   if (!config.chatwoot.accountId)    missing.push("CHATWOOT_ACCOUNT_ID");
   if (!config.tango.accessToken) {
     console.warn("[config] TANGO_ACCESS_TOKEN no configurado — sync con Tango desactivado");
