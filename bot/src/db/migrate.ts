@@ -9,8 +9,16 @@ CREATE TABLE IF NOT EXISTS contacts (
   name                TEXT NOT NULL,
   phone_normalized    TEXT NOT NULL,
   province_code       TEXT,
-  seller_code         TEXT,   -- SellerCode de Tango → base para asignar zona
-  zone                TEXT,
+  seller_code         TEXT,
+  -- Días de entrega leídos desde Tango (ShippingAddresses de la dirección principal).
+  -- La difusión se envía 2 días hábiles antes: delivers_wednesday → difusión el lunes.
+  delivers_monday     BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_tuesday    BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_wednesday  BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_thursday   BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_friday     BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_saturday   BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_sunday     BOOLEAN NOT NULL DEFAULT FALSE,
   chatwoot_contact_id INTEGER,
   opt_out             BOOLEAN NOT NULL DEFAULT FALSE,
   synced_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()

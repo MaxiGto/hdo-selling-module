@@ -1,57 +1,79 @@
-// Definición de todas las campañas automáticas.
-// Este es el ÚNICO archivo que el equipo edita para agregar, quitar o
-// reprogramar campañas. No hay que tocar ningún otro archivo.
+import type { DeliveryDay } from "../contacts/contactRepository.js";
+
+// La difusión se envía 2 días hábiles ANTES del día de entrega.
+// Envíos: lunes a viernes a las 9:00 hs (ART).
 //
-// schedule: expresión cron  →  "minuto hora * * díaSemana"
-//   0 9 * * 1  = lunes 9:00 hs
-//   0 9 * * 3  = miércoles 9:00 hs
-//   0 10 * * 5 = viernes 10:00 hs
-//
-// template.name: nombre exacto de la plantilla aprobada en Meta.
-// template.variables: variables en el orden que pide la plantilla.
-//   Podés usar {{contact.name}} — se reemplaza por el nombre del cliente.
+// Día de difusión → Día de entrega
+//   Lunes         → Miércoles
+//   Martes        → Jueves
+//   Miércoles     → Viernes
+//   Jueves        → Lunes (semana siguiente)
+//   Viernes       → Martes (semana siguiente)
 
 export interface CampaignDefinition {
-  name: string;
-  schedule: string;
-  audienceFilter: { zone: string };
+  // Día en que se envía la difusión (determina el cron y el filtro de audiencia)
+  sendDay: "monday" | "tuesday" | "wednesday" | "thursday" | "friday";
+  // Día de entrega correspondiente (2 días hábiles después)
+  deliveryDay: DeliveryDay;
+  // Texto del día para el template ("el miércoles", "el lunes", etc.)
+  deliveryDayLabel: string;
   template: {
-    name: string;
+    name: string;     // nombre exacto del template aprobado en Meta
     language: string;
+    // Variables posicionales del template. {{contact.name}} se resuelve en runtime.
     variables: Record<string, string>;
   };
 }
 
 export const CAMPAIGNS: CampaignDefinition[] = [
-  // ── Descomentá y completá cuando estén definidas las zonas y los templates ──
-
-  // {
-  //   name: "visita_zona_norte",
-  //   schedule: "0 9 * * 1",            // lunes 9:00 hs
-  //   audienceFilter: { zone: "zona_norte" },
-  //   template: {
-  //     name: "visita_programada",
-  //     language: "es_AR",
-  //     variables: {
-  //       "1": "{{contact.name}}",
-  //       "2": "el lunes",
-  //       "3": "entre las 9 y las 13 hs",
-  //     },
-  //   },
-  // },
-
-  // {
-  //   name: "visita_zona_sur",
-  //   schedule: "0 9 * * 3",            // miércoles 9:00 hs
-  //   audienceFilter: { zone: "zona_sur" },
-  //   template: {
-  //     name: "visita_programada",
-  //     language: "es_AR",
-  //     variables: {
-  //       "1": "{{contact.name}}",
-  //       "2": "el miércoles",
-  //       "3": "entre las 14 y las 18 hs",
-  //     },
-  //   },
-  // },
+  {
+    sendDay: "monday",
+    deliveryDay: "wednesday",
+    deliveryDayLabel: "el miércoles",
+    template: {
+      name: "visita_programada",
+      language: "es_AR",
+      variables: { "1": "{{contact.name}}", "2": "el miércoles" },
+    },
+  },
+  {
+    sendDay: "tuesday",
+    deliveryDay: "thursday",
+    deliveryDayLabel: "el jueves",
+    template: {
+      name: "visita_programada",
+      language: "es_AR",
+      variables: { "1": "{{contact.name}}", "2": "el jueves" },
+    },
+  },
+  {
+    sendDay: "wednesday",
+    deliveryDay: "friday",
+    deliveryDayLabel: "el viernes",
+    template: {
+      name: "visita_programada",
+      language: "es_AR",
+      variables: { "1": "{{contact.name}}", "2": "el viernes" },
+    },
+  },
+  {
+    sendDay: "thursday",
+    deliveryDay: "monday",
+    deliveryDayLabel: "el lunes",
+    template: {
+      name: "visita_programada",
+      language: "es_AR",
+      variables: { "1": "{{contact.name}}", "2": "el lunes" },
+    },
+  },
+  {
+    sendDay: "friday",
+    deliveryDay: "tuesday",
+    deliveryDayLabel: "el martes",
+    template: {
+      name: "visita_programada",
+      language: "es_AR",
+      variables: { "1": "{{contact.name}}", "2": "el martes" },
+    },
+  },
 ];
