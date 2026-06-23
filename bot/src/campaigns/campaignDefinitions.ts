@@ -3,24 +3,25 @@ import type { DeliveryDay } from "../contacts/contactRepository.js";
 // La difusión se envía 2 días hábiles ANTES del día de entrega.
 // Envíos: lunes a viernes a las 9:00 hs (ART).
 //
-// Día de difusión → Día de entrega
-//   Lunes         → Miércoles
-//   Martes        → Jueves
-//   Miércoles     → Viernes
-//   Jueves        → Lunes (semana siguiente)
-//   Viernes       → Martes (semana siguiente)
+// Día de difusión → Día de entrega  (offset calendario)
+//   Lunes         → Miércoles       (+2)
+//   Martes        → Jueves          (+2)
+//   Miércoles     → Viernes         (+2)
+//   Jueves        → Lunes           (+4 — saltando fin de semana)
+//   Viernes       → Martes          (+4 — saltando fin de semana)
 
 export interface CampaignDefinition {
-  // Día en que se envía la difusión (determina el cron y el filtro de audiencia)
   sendDay: "monday" | "tuesday" | "wednesday" | "thursday" | "friday";
-  // Día de entrega correspondiente (2 días hábiles después)
   deliveryDay: DeliveryDay;
-  // Texto del día para el template ("el miércoles", "el lunes", etc.)
-  deliveryDayLabel: string;
+  // Días calendario entre sendDay y deliveryDay. Se usa para calcular la fecha exacta.
+  deliveryDateOffset: number;
   template: {
-    name: string;     // nombre exacto del template aprobado en Meta
+    name: string;
     language: string;
-    // Variables posicionales del template. {{contact.name}} se resuelve en runtime.
+    // Variables posicionales del template (1-indexed), resueltas en runtime:
+    //   "{{delivery.dayName}}" → nombre del día de entrega en español (ej. "Miércoles")
+    //   "{{delivery.date}}"    → fecha de entrega d/m (ej. "25/6")
+    //   "{{end.dayName}}"      → día anterior a la entrega (corte de pedidos)
     variables: Record<string, string>;
   };
 }
@@ -29,51 +30,76 @@ export const CAMPAIGNS: CampaignDefinition[] = [
   {
     sendDay: "monday",
     deliveryDay: "wednesday",
-    deliveryDayLabel: "el miércoles",
+    deliveryDateOffset: 2,
     template: {
-      name: "visita_programada",
+      name: "difusion_1",
       language: "es_AR",
-      variables: { "1": "{{contact.name}}", "2": "el miércoles" },
+      variables: {
+        "1": "{{delivery.dayName}}",  // order_day
+        "2": "{{delivery.date}}",     // order_date
+        "3": "{{end.dayName}}",       // end_day
+        "4": "10AM",                  // end_time
+      },
     },
   },
   {
     sendDay: "tuesday",
     deliveryDay: "thursday",
-    deliveryDayLabel: "el jueves",
+    deliveryDateOffset: 2,
     template: {
-      name: "visita_programada",
+      name: "difusion_1",
       language: "es_AR",
-      variables: { "1": "{{contact.name}}", "2": "el jueves" },
+      variables: {
+        "1": "{{delivery.dayName}}",
+        "2": "{{delivery.date}}",
+        "3": "{{end.dayName}}",
+        "4": "10AM",
+      },
     },
   },
   {
     sendDay: "wednesday",
     deliveryDay: "friday",
-    deliveryDayLabel: "el viernes",
+    deliveryDateOffset: 2,
     template: {
-      name: "visita_programada",
+      name: "difusion_1",
       language: "es_AR",
-      variables: { "1": "{{contact.name}}", "2": "el viernes" },
+      variables: {
+        "1": "{{delivery.dayName}}",
+        "2": "{{delivery.date}}",
+        "3": "{{end.dayName}}",
+        "4": "10AM",
+      },
     },
   },
   {
     sendDay: "thursday",
     deliveryDay: "monday",
-    deliveryDayLabel: "el lunes",
+    deliveryDateOffset: 4,
     template: {
-      name: "visita_programada",
+      name: "difusion_1",
       language: "es_AR",
-      variables: { "1": "{{contact.name}}", "2": "el lunes" },
+      variables: {
+        "1": "{{delivery.dayName}}",
+        "2": "{{delivery.date}}",
+        "3": "{{end.dayName}}",       // el domingo antes del lunes
+        "4": "10AM",
+      },
     },
   },
   {
     sendDay: "friday",
     deliveryDay: "tuesday",
-    deliveryDayLabel: "el martes",
+    deliveryDateOffset: 4,
     template: {
-      name: "visita_programada",
+      name: "difusion_1",
       language: "es_AR",
-      variables: { "1": "{{contact.name}}", "2": "el martes" },
+      variables: {
+        "1": "{{delivery.dayName}}",
+        "2": "{{delivery.date}}",
+        "3": "{{end.dayName}}",       // el lunes antes del martes
+        "4": "10AM",
+      },
     },
   },
 ];

@@ -8,8 +8,52 @@ import pool from "../db/pool.js";
 import type { CampaignDefinition } from "./campaignDefinitions.js";
 import { config } from "../config.js";
 
+// Argentina es UTC-3 fijo, sin horario de verano.
+const ART_OFFSET_MS = -3 * 60 * 60 * 1000;
+
+const DAY_NAMES_ES: Record<number, string> = {
+  0: "Domingo",
+  1: "Lunes",
+  2: "Martes",
+  3: "Miércoles",
+  4: "Jueves",
+  5: "Viernes",
+  6: "Sábado",
+};
+
+// Calcula la fecha de entrega (sendDay + offset) y el día de corte (entrega - 1 día)
+// usando la hora local de Argentina. Devuelve los tokens de reemplazo.
+function buildDateTokens(deliveryDateOffset: number): Record<string, string> {
+  const nowART = new Date(Date.now() + ART_OFFSET_MS);
+  const deliveryMs = nowART.getTime() + deliveryDateOffset * 24 * 60 * 60 * 1000;
+  const delivery = new Date(deliveryMs);
+  const endDay  = new Date(deliveryMs - 24 * 60 * 60 * 1000);
+
+  return {
+    "{{delivery.dayName}}": DAY_NAMES_ES[delivery.getUTCDay()] ?? "",
+    "{{delivery.date}}":    `${delivery.getUTCDate()}/${delivery.getUTCMonth() + 1}`,
+    "{{end.dayName}}":      DAY_NAMES_ES[endDay.getUTCDay()] ?? "",
+  };
+}
+
+// Reemplaza tokens en los valores de las variables del template.
+function resolveVars(
+  vars: Record<string, string>,
+  tokens: Record<string, string>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, val] of Object.entries(vars)) {
+    let v = val;
+    for (const [token, replacement] of Object.entries(tokens)) {
+      v = v.replace(token, replacement);
+    }
+    result[key] = v;
+  }
+  return result;
+}
+
 export async function runCampaign(def: CampaignDefinition): Promise<void> {
-  const label = `sendDay=${def.sendDay} → deliveryDay=${def.deliveryDay}`;
+  const label = `${def.sendDay} → ${def.deliveryDay}`;
   console.log(`[campaign] iniciando difusión (${label})...`);
 
   const audience = await getAudienceByDeliveryDay(def.deliveryDay);
@@ -17,6 +61,14 @@ export async function runCampaign(def: CampaignDefinition): Promise<void> {
     console.log(`[campaign] sin contactos con entrega "${def.deliveryDay}" — saltando`);
     return;
   }
+
+  const tokens = buildDateTokens(def.deliveryDateOffset);
+  const resolvedVars = resolveVars(def.template.variables, tokens);
+  console.log(
+    `[campaign] entrega: ${resolvedVars["1"]} ${resolvedVars["2"]}` +
+    ` | corte: ${resolvedVars["3"]} ${resolvedVars["4"]}` +
+    ` | audiencia: ${audience.length} contactos`,
+  );
 
   const campaignName = `difusion_${def.sendDay}_${def.deliveryDay}`;
   const { rows } = await pool.query<{ id: number }>(
@@ -38,11 +90,6 @@ export async function runCampaign(def: CampaignDefinition): Promise<void> {
       }
 
       const conversationId = await createConversation(chatwootId, config.chatwoot.inboxId);
-
-      const resolvedVars: Record<string, string> = {};
-      for (const [key, val] of Object.entries(def.template.variables)) {
-        resolvedVars[key] = val.replace("{{contact.name}}", contact.name);
-      }
 
       await sendTemplateMessage(conversationId, {
         name: def.template.name,
