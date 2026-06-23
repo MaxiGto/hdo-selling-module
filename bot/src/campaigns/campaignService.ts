@@ -21,13 +21,13 @@ const DAY_NAMES_ES: Record<number, string> = {
   6: "Sábado",
 };
 
-// Calcula la fecha de entrega (sendDay + offset) y el día de corte (entrega - 1 día)
-// usando la hora local de Argentina. Devuelve los tokens de reemplazo.
-function buildDateTokens(deliveryDateOffset: number): Record<string, string> {
+// Calcula las fechas de entrega y corte de pedidos usando la hora local de Argentina.
+// Ambos offsets son relativos al día de envío (sendDay = hoy cuando corre el cron).
+function buildDateTokens(deliveryDateOffset: number, endDayOffset: number): Record<string, string> {
+  const DAY_MS = 24 * 60 * 60 * 1000;
   const nowART = new Date(Date.now() + ART_OFFSET_MS);
-  const deliveryMs = nowART.getTime() + deliveryDateOffset * 24 * 60 * 60 * 1000;
-  const delivery = new Date(deliveryMs);
-  const endDay  = new Date(deliveryMs - 24 * 60 * 60 * 1000);
+  const delivery = new Date(nowART.getTime() + deliveryDateOffset * DAY_MS);
+  const endDay  = new Date(nowART.getTime() + endDayOffset * DAY_MS);
 
   return {
     "{{delivery.dayName}}": DAY_NAMES_ES[delivery.getUTCDay()] ?? "",
@@ -62,7 +62,7 @@ export async function runCampaign(def: CampaignDefinition): Promise<void> {
     return;
   }
 
-  const tokens = buildDateTokens(def.deliveryDateOffset);
+  const tokens = buildDateTokens(def.deliveryDateOffset, def.endDayOffset);
   const resolvedVars = resolveVars(def.template.variables, tokens);
   console.log(
     `[campaign] entrega: ${resolvedVars["1"]} ${resolvedVars["2"]}` +
