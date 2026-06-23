@@ -34,6 +34,17 @@ export async function sendMessage(
 
 // ── Difusiones salientes (campañas) ──────────────────────────────────────
 
+// Extrae el id de una respuesta de Chatwoot que puede venir como
+// { id } o { payload: { id } } según la versión/endpoint.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractId(body: any, context: string): number {
+  const id: unknown = body?.id ?? body?.payload?.id ?? body?.payload?.contact?.id;
+  if (typeof id !== "number" || !id) {
+    throw new Error(`${context}: no se pudo extraer el id del response: ${JSON.stringify(body)}`);
+  }
+  return id;
+}
+
 // Busca un contacto por teléfono; si no existe, lo crea. Devuelve el ID de Chatwoot.
 export async function findOrCreateContact(
   name: string,
@@ -45,8 +56,10 @@ export async function findOrCreateContact(
     { headers: agentHeaders() },
   );
   if (searchRes.ok) {
-    const data = (await searchRes.json()) as { payload: { id: number }[] };
-    if (data.payload.length > 0) return data.payload[0].id;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = (await searchRes.json()) as any;
+    const list: { id: number }[] = Array.isArray(data?.payload) ? data.payload : [];
+    if (list.length > 0 && list[0].id) return list[0].id;
   }
 
   // Crear si no existe
@@ -55,9 +68,10 @@ export async function findOrCreateContact(
     headers: agentHeaders(),
     body: JSON.stringify({ name, phone_number: phone, inbox_id: config.chatwoot.inboxId }),
   });
-  if (!createRes.ok) throw new Error(`createContact falló (${createRes.status}): ${await createRes.text()}`);
-  const created = (await createRes.json()) as { id: number };
-  return created.id;
+  if (!createRes.ok) {
+    throw new Error(`createContact falló (${createRes.status}): ${await createRes.text()}`);
+  }
+  return extractId(await createRes.json(), "createContact");
 }
 
 // Crea una conversación saliente para el contacto en el inbox de WhatsApp.
@@ -70,9 +84,10 @@ export async function createConversation(
     headers: agentHeaders(),
     body: JSON.stringify({ inbox_id: inboxId }),
   });
-  if (!res.ok) throw new Error(`createConversation falló (${res.status}): ${await res.text()}`);
-  const data = (await res.json()) as { id: number };
-  return data.id;
+  if (!res.ok) {
+    throw new Error(`createConversation falló (${res.status}): ${await res.text()}`);
+  }
+  return extractId(await res.json(), "createConversation");
 }
 
 // Envía un template de WhatsApp aprobado por Meta dentro de una conversación.
