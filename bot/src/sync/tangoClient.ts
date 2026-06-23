@@ -1,21 +1,37 @@
 import { config } from "../config.js";
 
-// Respuesta del endpoint GET /api/Aperture/Customer
-interface TangoCustomer {
-  CustomerID: number;
+// Schema real del endpoint GET /api/Aperture/Customer (verificado 2026-06-23).
+interface TangoShippingAddress {
   Code: string;
-  FirstName?: string;
-  LastName?: string;
-  BusinessName?: string;
-  ProvinceCode?: string;
-  MobilePhoneNumber?: string;
   PhoneNumber1?: string;
   PhoneNumber2?: string;
+  DefaultAddress: "S" | "N";
+  DeliversMonday:    "S" | "N";
+  DeliversTuesday:   "S" | "N";
+  DeliversWednesday: "S" | "N";
+  DeliversThursday:  "S" | "N";
+  DeliversFriday:    "S" | "N";
+  DeliversSaturday:  "S" | "N";
+  DeliversSunday:    "S" | "N";
+  DeliveryHours?: string;
+}
+
+interface TangoCustomer {
+  Code: string;
+  BusinessName?: string;
+  TradeName?: string;
+  ProvinceCode?: string;
+  PhoneNumbers?: string;         // teléfono principal (puede tener múltiples separados por coma)
+  MobilePhoneNumber?: string;
+  Email?: string;
+  SellerCode?: string;           // código del vendedor asignado → base para zona
+  ShippingAddresses?: TangoShippingAddress[];
+  DisabledDate?: string | null;  // null = activo
 }
 
 interface TangoPage {
+  Paging: { PageNumber: number; PageSize: number; MoreData: boolean };
   Data: TangoCustomer[];
-  TotalCount: number;
 }
 
 const PAGE_SIZE = 500;
@@ -38,32 +54,65 @@ export function normalizeArgentinePhone(raw: string): string | null {
   // 10 dígitos → celular sin indicador → +549
   if (local.length === 10) return "+549" + local;
 
-  // No se puede determinar el formato con certeza
   return null;
 }
 
-// Obtiene el mejor número de teléfono disponible para un cliente.
+// Primer número válido disponible. PhoneNumbers puede tener varios separados por coma/guión.
 function bestPhone(c: TangoCustomer): string | null {
-  for (const field of [c.MobilePhoneNumber, c.PhoneNumber1, c.PhoneNumber2]) {
-    if (field?.trim()) {
-      const normalized = normalizeArgentinePhone(field.trim());
-      if (normalized) return normalized;
-    }
+  const candidates = [
+    c.MobilePhoneNumber,
+    // PhoneNumbers puede contener múltiples: tomamos el primero
+    c.PhoneNumbers?.split(/[,/]/)[0],
+    // Teléfonos de la dirección de entrega principal
+    c.ShippingAddresses?.find((a) => a.DefaultAddress === "S")?.PhoneNumber1,
+  ];
+  for (const raw of candidates) {
+    if (!raw?.trim()) continue;
+    const normalized = normalizeArgentinePhone(raw.trim());
+    if (normalized) return normalized;
   }
   return null;
 }
 
-// Nombre para mostrar al cliente.
-function displayName(c: TangoCustomer): string {
-  const full = [c.FirstName, c.LastName].filter(Boolean).join(" ").trim();
-  return full || c.BusinessName?.trim() || `Cliente ${c.Code}`;
+export interface TangoCustomerFlat {
+  tangoId: string;
+  name: string;
+  phone: string | null;
+  provinceCode: string | null;
+  sellerCode: string | null;
+  // Días de entrega de la dirección principal (true = entrega ese día)
+  deliveryDays: {
+    monday: boolean; tuesday: boolean; wednesday: boolean;
+    thursday: boolean; friday: boolean; saturday: boolean; sunday: boolean;
+  };
 }
 
-// Trae todos los clientes de Tango paginando automáticamente.
-export async function fetchAllCustomers(): Promise<
-  { tangoId: string; name: string; phone: string | null; provinceCode: string | null }[]
-> {
-  const results: ReturnType<typeof fetchAllCustomers> extends Promise<infer T> ? T : never = [];
+function flattenCustomer(c: TangoCustomer): TangoCustomerFlat {
+  const name = c.TradeName?.trim() || c.BusinessName?.trim() || `Cliente ${c.Code}`;
+  const defaultAddr = c.ShippingAddresses?.find((a) => a.DefaultAddress === "S");
+  const flag = (v?: string) => v === "S";
+
+  return {
+    tangoId:      c.Code,
+    name,
+    phone:        bestPhone(c),
+    provinceCode: c.ProvinceCode?.trim() ?? null,
+    sellerCode:   c.SellerCode?.trim() ?? null,
+    deliveryDays: {
+      monday:    flag(defaultAddr?.DeliversMonday),
+      tuesday:   flag(defaultAddr?.DeliversTuesday),
+      wednesday: flag(defaultAddr?.DeliversWednesday),
+      thursday:  flag(defaultAddr?.DeliversThursday),
+      friday:    flag(defaultAddr?.DeliversFriday),
+      saturday:  flag(defaultAddr?.DeliversSaturday),
+      sunday:    flag(defaultAddr?.DeliversSunday),
+    },
+  };
+}
+
+// Trae todos los clientes activos de Tango paginando automáticamente.
+export async function fetchAllCustomers(): Promise<TangoCustomerFlat[]> {
+  const results: TangoCustomerFlat[] = [];
   let page = 1;
 
   while (true) {
@@ -72,26 +121,20 @@ export async function fetchAllCustomers(): Promise<
       `?pageSize=${PAGE_SIZE}&pageNumber=${page}`;
 
     const res = await fetch(url, {
-      headers: { "access-token": config.tango.accessToken },
+      headers: { accesstoken: config.tango.accessToken },
     });
 
-    if (!res.ok) {
-      throw new Error(`Tango API error (${res.status}): ${await res.text()}`);
-    }
+    if (!res.ok) throw new Error(`Tango API error (${res.status}): ${await res.text()}`);
 
     const body = (await res.json()) as TangoPage;
-    const customers = body.Data ?? [];
 
-    for (const c of customers) {
-      results.push({
-        tangoId: String(c.CustomerID),
-        name: displayName(c),
-        phone: bestPhone(c),
-        provinceCode: c.ProvinceCode?.trim() ?? null,
-      });
+    for (const c of body.Data ?? []) {
+      // Ignorar clientes dados de baja
+      if (c.DisabledDate) continue;
+      results.push(flattenCustomer(c));
     }
 
-    if (results.length >= body.TotalCount || customers.length < PAGE_SIZE) break;
+    if (!body.Paging.MoreData) break;
     page++;
   }
 

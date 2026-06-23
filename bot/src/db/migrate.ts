@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   name                TEXT NOT NULL,
   phone_normalized    TEXT NOT NULL,
   province_code       TEXT,
+  seller_code         TEXT,   -- SellerCode de Tango → base para asignar zona
   zone                TEXT,
   chatwoot_contact_id INTEGER,
   opt_out             BOOLEAN NOT NULL DEFAULT FALSE,

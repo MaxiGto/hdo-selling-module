@@ -45,19 +45,22 @@ export async function upsertContact(data: {
   name: string;
   phoneNormalized: string;
   provinceCode: string | null;
+  sellerCode: string | null;
   zone: string | null;
 }): Promise<void> {
   await pool.query(
-    `INSERT INTO contacts (tango_id, name, phone_normalized, province_code, zone, synced_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())
+    `INSERT INTO contacts
+       (tango_id, name, phone_normalized, province_code, seller_code, zone, synced_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
      ON CONFLICT (tango_id) DO UPDATE SET
        name             = EXCLUDED.name,
        phone_normalized = EXCLUDED.phone_normalized,
        province_code    = EXCLUDED.province_code,
+       seller_code      = EXCLUDED.seller_code,
        -- zone solo se asigna si el registro aún no tiene zona
        zone             = COALESCE(contacts.zone, EXCLUDED.zone),
        synced_at        = NOW()`,
-    [data.tangoId, data.name, data.phoneNormalized, data.provinceCode, data.zone],
+    [data.tangoId, data.name, data.phoneNormalized, data.provinceCode, data.sellerCode, data.zone],
   );
 }
 

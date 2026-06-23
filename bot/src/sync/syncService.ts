@@ -2,18 +2,19 @@ import { fetchAllCustomers } from "./tangoClient.js";
 import { upsertContact, countUnzoned } from "../contacts/contactRepository.js";
 import { config } from "../config.js";
 
-// Mapa provincia AFIP → zona de reparto de Oasis.
-// Editar acá cuando se definan las zonas reales.
-const ZONE_BY_PROVINCE: Record<string, string> = {
-  // Ejemplos — reemplazar con las zonas reales de Oasis:
-  // "C": "zona_caba",
-  // "B": "zona_gba",
-  // "X": "zona_interior",
+// Mapa vendedor (SellerCode de Tango) → zona de reparto de Oasis.
+// Completar con los códigos reales una vez confirmados con el equipo.
+// Cada vendedor tiene su zona y sus días de visita.
+const ZONE_BY_SELLER: Record<string, string> = {
+  // Ejemplos — reemplazar con los SellerCodes reales de Oasis:
+  // "MG": "zona_norte",
+  // "OA": "zona_sur",
+  // "GT": "zona_centro",
 };
 
-function resolveZone(provinceCode: string | null): string | null {
-  if (!provinceCode) return null;
-  return ZONE_BY_PROVINCE[provinceCode.toUpperCase()] ?? null;
+function resolveZone(sellerCode: string | null): string | null {
+  if (!sellerCode) return null;
+  return ZONE_BY_SELLER[sellerCode.toUpperCase()] ?? null;
 }
 
 export async function runSync(): Promise<void> {
@@ -25,7 +26,7 @@ export async function runSync(): Promise<void> {
   }
 
   const customers = await fetchAllCustomers();
-  console.log(`[sync] ${customers.length} clientes obtenidos de Tango`);
+  console.log(`[sync] ${customers.length} clientes activos obtenidos de Tango`);
 
   let sinTelefono = 0;
   for (const c of customers) {
@@ -36,13 +37,14 @@ export async function runSync(): Promise<void> {
       name:            c.name,
       phoneNormalized: c.phone,
       provinceCode:    c.provinceCode,
-      zone:            resolveZone(c.provinceCode),
+      sellerCode:      c.sellerCode,
+      zone:            resolveZone(c.sellerCode),
     });
   }
 
   const sinZona = await countUnzoned();
   console.log(
     `[sync] completado — omitidos sin teléfono: ${sinTelefono}` +
-    (sinZona > 0 ? ` | sin zona asignada: ${sinZona} (revisar ZONE_BY_PROVINCE)` : ""),
+    (sinZona > 0 ? ` | sin zona asignada: ${sinZona} (revisar ZONE_BY_SELLER en syncService.ts)` : ""),
   );
 }
