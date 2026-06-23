@@ -9,15 +9,25 @@ export const config = {
     baseUrl: process.env.CHATWOOT_BASE_URL ?? "http://rails:3000",
     accessToken: process.env.CHATWOOT_API_ACCESS_TOKEN ?? "",
     accountId: process.env.CHATWOOT_ACCOUNT_ID ?? "",
+    // ID del inbox de WhatsApp (ver: Chatwoot → Settings → Inboxes).
+    inboxId: Number(process.env.CHATWOOT_INBOX_ID ?? 1),
+  },
+  tango: {
+    // URL base de la API de Tango Nexo Tiendas.
+    baseUrl: process.env.TANGO_API_BASE_URL ?? "https://tiendas.axoft.com",
+    accessToken: process.env.TANGO_ACCESS_TOKEN ?? "",
   },
 };
 
 // Avisa al arrancar si falta algo crítico, sin frenar el proceso.
 export function warnMissingConfig(): void {
   const missing: string[] = [];
-  if (!config.anthropicApiKey) missing.push("ANTHROPIC_API_KEY");
-  if (!config.chatwoot.accessToken) missing.push("CHATWOOT_API_ACCESS_TOKEN");
-  if (!config.chatwoot.accountId) missing.push("CHATWOOT_ACCOUNT_ID");
+  if (!config.anthropicApiKey)       missing.push("ANTHROPIC_API_KEY");
+  if (!config.chatwoot.accessToken)  missing.push("CHATWOOT_API_ACCESS_TOKEN");
+  if (!config.chatwoot.accountId)    missing.push("CHATWOOT_ACCOUNT_ID");
+  if (!config.tango.accessToken) {
+    console.warn("[config] TANGO_ACCESS_TOKEN no configurado — sync con Tango desactivado");
+  }
   if (missing.length > 0) {
     console.warn(
       `[config] Faltan variables (${missing.join(", ")}). El bot recibe eventos pero no podrá responder hasta completarlas.`,

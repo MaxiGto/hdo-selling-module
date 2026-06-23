@@ -1,6 +1,8 @@
 import express from "express";
 import { config, warnMissingConfig } from "./config.js";
 import { handleChatwootWebhook } from "./controllers/webhookController.js";
+import { runMigrations } from "./db/migrate.js";
+import { startCrons } from "./campaigns/cronService.js";
 
 const app = express();
 app.use(express.json());
@@ -32,7 +34,15 @@ app.post("/meta/webhook", (req, res) => {
   res.sendStatus(200);
 });
 
-app.listen(config.port, () => {
-  console.log(`oasis-whatsapp-bot escuchando en :${config.port}`);
-  warnMissingConfig();
-});
+runMigrations()
+  .then(() => {
+    app.listen(config.port, () => {
+      console.log(`oasis-whatsapp-bot escuchando en :${config.port}`);
+      warnMissingConfig();
+      startCrons();
+    });
+  })
+  .catch((err) => {
+    console.error("[startup] error en migraciones:", err);
+    process.exit(1);
+  });
