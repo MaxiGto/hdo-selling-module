@@ -105,7 +105,7 @@ export async function sendTemplateMessage(
         name: template.name,
         category: "MARKETING",
         language: template.language,
-        processed_params: JSON.stringify(template.variables),
+        processed_params: template.variables,
       },
     }),
   });
