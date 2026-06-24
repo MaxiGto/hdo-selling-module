@@ -14,3 +14,9 @@ export async function markHandedOff(conversationId: number, motivo: string): Pro
     [conversationId, motivo],
   );
 }
+
+// Llamado cuando el asesor resuelve la conversación: el bot vuelve a estar activo
+// en la próxima conversación que abra ese cliente.
+export async function removeHandoff(conversationId: number): Promise<void> {
+  await pool.query("DELETE FROM handoffs WHERE conversation_id = $1", [conversationId]);
+}

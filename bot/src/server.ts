@@ -1,6 +1,7 @@
 import express from "express";
 import { config, warnMissingConfig } from "./config.js";
 import { handleChatwootWebhook } from "./controllers/webhookController.js";
+import { handleChatwootEvent } from "./controllers/eventsController.js";
 import { runMigrations } from "./db/migrate.js";
 import { startCrons } from "./campaigns/cronService.js";
 
@@ -13,6 +14,10 @@ app.get("/health", (_req, res) => {
 
 // Webhook del Agent Bot de Chatwoot: recibe mensajes y responde con el agente IA.
 app.post("/chatwoot/webhook", handleChatwootWebhook);
+
+// Webhook de eventos generales de Chatwoot (conversation_status_changed, etc.).
+// Configurar en Chatwoot → Settings → Integrations → Webhooks → http://bot:3000/chatwoot/events
+app.post("/chatwoot/events", handleChatwootEvent);
 
 // --- Debug: webhook directo de Meta (solo para diagnóstico, no se usa en el flujo real) ---
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN ?? "oasis-verify-token";

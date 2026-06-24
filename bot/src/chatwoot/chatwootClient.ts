@@ -201,7 +201,7 @@ export async function createConversation(
   const res = await fetch(accountUrl("/conversations"), {
     method: "POST",
     headers: agentHeaders(),
-    body: JSON.stringify({ contact_id: contactId, inbox_id: inboxId }),
+    body: JSON.stringify({ contact_id: contactId, inbox_id: inboxId, status: "open" }),
   });
   if (!res.ok) {
     throw new Error(`createConversation falló (${res.status}): ${await res.text()}`);
