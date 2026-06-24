@@ -50,6 +50,15 @@ export async function fetchConversationMessages(
     .slice(-limit);
 }
 
+// Abre una conversación (la saca de "pending"). Fire-and-forget: no lanza si falla.
+export function openConversation(conversationId: number): void {
+  void fetch(accountUrl(`/conversations/${conversationId}`), {
+    method: "PATCH",
+    headers: agentHeaders(),
+    body: JSON.stringify({ status: "open" }),
+  }).catch((err) => console.warn(`[chatwoot] openConversation(${conversationId}) falló:`, err));
+}
+
 // Envía un mensaje del bot a una conversación existente.
 export async function sendMessage(
   conversationId: number,

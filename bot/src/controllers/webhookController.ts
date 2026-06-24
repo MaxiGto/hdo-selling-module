@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { generateReply } from "../agent/agentService.js";
 import { isHandedOff, markHandedOff } from "../agent/handoffRepository.js";
-import { sendMessage } from "../chatwoot/chatwootClient.js";
+import { sendMessage, openConversation } from "../chatwoot/chatwootClient.js";
 
 // Idempotencia básica: evita procesar el mismo message.id dos veces en el mismo proceso.
 const processedMessageIds = new Set<number>();
@@ -32,6 +32,9 @@ async function processEvent(payload: any): Promise<void> {
     const content: string = String(payload?.content ?? "").trim();
     const conversationId: unknown = payload?.conversation?.id;
     if (!content || typeof conversationId !== "number") return;
+
+    // Asegura que la conversación esté "open" (Chatwoot la crea como "pending" con Agent Bot)
+    openConversation(conversationId);
 
     // Conversación derivada a un asesor → el bot no interviene más
     if (await isHandedOff(conversationId)) {
