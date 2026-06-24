@@ -53,8 +53,8 @@ export interface ChatwootContactData {
 }
 
 // Crea o actualiza un contacto en Chatwoot con todos los datos de Tango.
-// Busca primero por teléfono. Devuelve el ID de Chatwoot.
-export async function upsertChatwootContact(data: ChatwootContactData): Promise<number> {
+// Busca primero por teléfono. Devuelve { id, created: true/false }.
+export async function upsertChatwootContact(data: ChatwootContactData): Promise<{ id: number; created: boolean }> {
   const payload: Record<string, unknown> = {
     name:       data.name,
     identifier: data.tangoId,
@@ -91,12 +91,17 @@ export async function upsertChatwootContact(data: ChatwootContactData): Promise<
       const list: { id: number }[] = Array.isArray(body?.payload) ? body.payload : [];
       if (list.length > 0 && list[0].id) {
         const id = list[0].id;
-        await fetch(accountUrl(`/contacts/${id}`), {
+        const patchRes = await fetch(accountUrl(`/contacts/${id}`), {
           method: "PATCH",
           headers: agentHeaders(),
           body: JSON.stringify(payload),
         });
-        return id;
+        if (!patchRes.ok) {
+          throw new Error(
+            `upsertChatwootContact PATCH (${data.tangoId}) falló (${patchRes.status}): ${await patchRes.text()}`,
+          );
+        }
+        return { id, created: false };
       }
     }
   }
@@ -112,7 +117,7 @@ export async function upsertChatwootContact(data: ChatwootContactData): Promise<
       `upsertChatwootContact (${data.tangoId}) falló (${createRes.status}): ${await createRes.text()}`,
     );
   }
-  return extractId(await createRes.json(), `upsertChatwootContact(${data.tangoId})`);
+  return { id: extractId(await createRes.json(), `upsertChatwootContact(${data.tangoId})`), created: true };
 }
 
 // ── Difusiones salientes (campañas) ──────────────────────────────────────

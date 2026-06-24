@@ -55,10 +55,9 @@ async function main(): Promise<void> {
     await Promise.all(
       batch.map(async (c) => {
         try {
-          const hadPhone = !!c.phone;
-          if (!hadPhone) sinTelefono++;
+          if (!c.phone) sinTelefono++;
 
-          await upsertChatwootContact({
+          const result = await upsertChatwootContact({
             tangoId:        c.tangoId,
             name:           c.name,
             businessName:   c.businessName,
@@ -73,9 +72,7 @@ async function main(): Promise<void> {
             deliveryDays:   c.deliveryDays,
           });
 
-          // Heurística: si tenía teléfono y ya existía se actualizó, si no existía se creó.
-          // (La función busca primero, así que no podemos distinguir fácilmente sin más lógica.)
-          created++;
+          if (result.created) created++; else updated++;
         } catch (err) {
           errores++;
           const msg = err instanceof Error ? err.message : String(err);
@@ -94,7 +91,7 @@ async function main(): Promise<void> {
         ? formatDuration((elapsed / done) * (total - done))
         : "—";
       console.log(
-        `[import] ${done}/${total} (${pct}%) | ✓ ${created} | sin tel: ${sinTelefono} | ✗ ${errores} | ETA: ${eta}`,
+        `[import] ${done}/${total} (${pct}%) | +${created} nuevos | ~${updated} act. | sin tel: ${sinTelefono} | ✗ ${errores} | ETA: ${eta}`,
       );
     }
   }
@@ -103,7 +100,8 @@ async function main(): Promise<void> {
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log(`[import] COMPLETADO en ${elapsed}`);
   console.log(`  Total procesados : ${total}`);
-  console.log(`  Creados/actualizados : ${created}`);
+  console.log(`  Nuevos           : ${created}`);
+  console.log(`  Actualizados     : ${updated}`);
   console.log(`  Sin teléfono     : ${sinTelefono}`);
   console.log(`  Errores          : ${errores}`);
 
