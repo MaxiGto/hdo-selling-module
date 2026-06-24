@@ -36,7 +36,7 @@ export const CAMPAIGNS: CampaignDefinition[] = [
     endDayOffset: 1,          // martes
     template: {
       name: "difusion_1",
-      language: "es",
+      language: "es_AR",
       variables: {
         order_day:  "{{delivery.dayName}}",
         order_date: "{{delivery.date}}",
