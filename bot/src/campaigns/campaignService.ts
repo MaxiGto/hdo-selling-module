@@ -65,8 +65,8 @@ export async function runCampaign(def: CampaignDefinition): Promise<void> {
   const tokens = buildDateTokens(def.deliveryDateOffset, def.endDayOffset);
   const resolvedVars = resolveVars(def.template.variables, tokens);
   console.log(
-    `[campaign] entrega: ${resolvedVars["1"]} ${resolvedVars["2"]}` +
-    ` | corte: ${resolvedVars["3"]} ${resolvedVars["4"]}` +
+    `[campaign] entrega: ${resolvedVars["order_day"]} ${resolvedVars["order_date"]}` +
+    ` | corte: ${resolvedVars["end_day"]} ${resolvedVars["end_time"]}` +
     ` | audiencia: ${audience.length} contactos`,
   );
 
