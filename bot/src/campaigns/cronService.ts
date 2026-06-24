@@ -2,6 +2,7 @@ import { schedule } from "node-cron";
 import { CAMPAIGNS } from "./campaignDefinitions.js";
 import { runCampaign } from "./campaignService.js";
 import { runSync } from "../sync/syncService.js";
+import { clearAllHandoffs } from "../agent/handoffRepository.js";
 
 // Zona horaria de Argentina (UTC-3, sin DST).
 const TZ = "America/Argentina/Buenos_Aires";
@@ -12,6 +13,15 @@ const DOW: Record<"monday" | "tuesday" | "wednesday" | "thursday" | "friday", nu
 };
 
 export function startCrons(): void {
+  // Limpieza de handoffs: todos los días a las 00:00 hs.
+  // Libera conversaciones donde ningún asesor respondió durante el día.
+  schedule("0 0 * * *", () => {
+    void clearAllHandoffs().then((n) =>
+      console.log(`[cron] handoffs limpiados: ${n} conversaciones liberadas`),
+    );
+  }, { timezone: TZ });
+  console.log("[cron] limpieza handoffs → todos los días 00:00 hs (ART)");
+
   // Sync nocturno con Tango: todos los días a las 3:00 hs.
   schedule("0 3 * * *", () => void runSync(), { timezone: TZ });
   console.log("[cron] sync Tango → todos los días 03:00 hs (ART)");

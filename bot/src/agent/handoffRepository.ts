@@ -20,3 +20,10 @@ export async function markHandedOff(conversationId: number, motivo: string): Pro
 export async function removeHandoff(conversationId: number): Promise<void> {
   await pool.query("DELETE FROM handoffs WHERE conversation_id = $1", [conversationId]);
 }
+
+// Limpieza nocturna: libera todos los handoffs para que el bot retome
+// conversaciones donde ningún asesor respondió durante el día.
+export async function clearAllHandoffs(): Promise<number> {
+  const res = await pool.query("DELETE FROM handoffs RETURNING conversation_id");
+  return res.rowCount ?? 0;
+}
