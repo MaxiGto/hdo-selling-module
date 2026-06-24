@@ -79,10 +79,10 @@ export async function createConversation(
   contactId: number,
   inboxId: number,
 ): Promise<number> {
-  const res = await fetch(accountUrl(`/contacts/${contactId}/conversations`), {
+  const res = await fetch(accountUrl("/conversations"), {
     method: "POST",
     headers: agentHeaders(),
-    body: JSON.stringify({ inbox_id: inboxId }),
+    body: JSON.stringify({ contact_id: contactId, inbox_id: inboxId }),
   });
   if (!res.ok) {
     throw new Error(`createConversation falló (${res.status}): ${await res.text()}`);
