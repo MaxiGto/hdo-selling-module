@@ -101,12 +101,11 @@ export async function sendTemplateMessage(
     headers: agentHeaders(),
     body: JSON.stringify({
       message_type: "outgoing",
-      content_type: "text",
       template_params: {
         name: template.name,
         category: "MARKETING",
         language: template.language,
-        processed_params: template.variables,
+        processed_params: JSON.stringify(template.variables),
       },
     }),
   });
