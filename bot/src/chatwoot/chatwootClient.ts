@@ -19,6 +19,37 @@ function accountUrl(path: string): string {
 
 // ── Mensajes reactivos (webhook del Agent Bot) ────────────────────────────
 
+export interface ChatwootMessage {
+  id: number;
+  content: string | null;
+  // 0 = incoming (cliente), 1 = outgoing (bot/agente), 2 = activity (sistema)
+  message_type: number;
+  created_at: number; // unix timestamp
+}
+
+// Trae los últimos `limit` mensajes de una conversación, ordenados cronológicamente.
+// Filtra mensajes de actividad (tipo 2) y los sin contenido.
+export async function fetchConversationMessages(
+  conversationId: number,
+  limit = 20,
+): Promise<ChatwootMessage[]> {
+  const res = await fetch(
+    accountUrl(`/conversations/${conversationId}/messages`),
+    { headers: agentHeaders() },
+  );
+  if (!res.ok) {
+    console.warn(`[chatwoot] fetchMessages(${conversationId}) falló (${res.status})`);
+    return [];
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const body = (await res.json()) as any;
+  const all: ChatwootMessage[] = Array.isArray(body?.payload) ? body.payload : [];
+  return all
+    .filter((m) => m.message_type !== 2 && m.content?.trim())
+    .sort((a, b) => a.created_at - b.created_at)
+    .slice(-limit);
+}
+
 // Envía un mensaje del bot a una conversación existente.
 export async function sendMessage(
   conversationId: number,

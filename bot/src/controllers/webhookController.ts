@@ -1,25 +1,24 @@
 import type { Request, Response } from "express";
 import { generateReply } from "../agent/agentService.js";
+import { isHandedOff, markHandedOff } from "../agent/handoffRepository.js";
 import { sendMessage } from "../chatwoot/chatwootClient.js";
 
-// Idempotencia básica en memoria por message.id (ver PLAN-MVP, Fase 2.4).
-// Provisorio: en la Fase 2 con Postgres pasa a la base para sobrevivir reinicios.
+// Idempotencia básica: evita procesar el mismo message.id dos veces en el mismo proceso.
 const processedMessageIds = new Set<number>();
 
 // Webhook del Agent Bot de Chatwoot.
-// ACK rápido (200) + procesamiento async liviano, sin colas.
+// ACK rápido (200) + procesamiento async, sin colas.
 export function handleChatwootWebhook(req: Request, res: Response): void {
   res.sendStatus(200);
   void processEvent(req.body);
 }
 
-// El payload del Agent Bot llega sin tipar; lo validamos defensivamente.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function processEvent(payload: any): Promise<void> {
   try {
     if (payload?.event !== "message_created") return;
 
-    // Solo respondemos a mensajes entrantes del cliente.
-    // (message_type puede venir como "incoming" o como 0 según la versión.)
+    // Solo respondemos a mensajes entrantes del cliente
     const isIncoming =
       payload?.message_type === "incoming" || payload?.message_type === 0;
     if (!isIncoming) return;
@@ -34,9 +33,22 @@ async function processEvent(payload: any): Promise<void> {
     const conversationId: unknown = payload?.conversation?.id;
     if (!content || typeof conversationId !== "number") return;
 
-    const reply = await generateReply(content);
-    await sendMessage(conversationId, reply);
-    console.log(`[bot] respondió a la conversación ${conversationId}`);
+    // Conversación derivada a un asesor → el bot no interviene más
+    if (await isHandedOff(conversationId)) {
+      console.log(`[bot] conv. ${conversationId} derivada a asesor, ignorando`);
+      return;
+    }
+
+    const result = await generateReply(conversationId, content);
+
+    if (result.type === "handoff") {
+      await sendMessage(conversationId, result.mensaje);
+      await markHandedOff(conversationId, result.motivo);
+      console.log(`[bot] conv. ${conversationId} derivada: ${result.motivo}`);
+    } else {
+      await sendMessage(conversationId, result.content);
+      console.log(`[bot] respondió a conv. ${conversationId}`);
+    }
   } catch (err) {
     console.error("[bot] error procesando evento:", err);
   }

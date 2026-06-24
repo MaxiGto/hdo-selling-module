@@ -40,6 +40,14 @@ CREATE TABLE IF NOT EXISTS campaign_contacts (
   status           TEXT NOT NULL DEFAULT 'sent',
   PRIMARY KEY (campaign_run_id, contact_id)
 );
+
+-- Conversaciones derivadas a un asesor humano. El bot ignora mensajes entrantes
+-- de estas conversaciones hasta que el cliente abra una nueva (Opción A del diseño).
+CREATE TABLE IF NOT EXISTS handoffs (
+  conversation_id  INTEGER PRIMARY KEY,
+  motivo           TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;
 
 export async function runMigrations(): Promise<void> {
