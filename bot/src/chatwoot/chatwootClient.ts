@@ -32,6 +32,89 @@ export async function sendMessage(
   if (!res.ok) throw new Error(`sendMessage falló (${res.status}): ${await res.text()}`);
 }
 
+// ── Importación / sincronización de contactos ────────────────────────────
+
+export interface ChatwootContactData {
+  tangoId: string;
+  name: string;
+  businessName: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  postalCode: string | null;
+  provinceCode: string | null;
+  documentNumber: string | null;
+  sellerCode: string | null;
+  deliveryDays: {
+    monday: boolean; tuesday: boolean; wednesday: boolean;
+    thursday: boolean; friday: boolean; saturday: boolean; sunday: boolean;
+  };
+}
+
+// Crea o actualiza un contacto en Chatwoot con todos los datos de Tango.
+// Busca primero por teléfono. Devuelve el ID de Chatwoot.
+export async function upsertChatwootContact(data: ChatwootContactData): Promise<number> {
+  const payload: Record<string, unknown> = {
+    name:       data.name,
+    identifier: data.tangoId,
+    additional_attributes: {
+      tango_id:          data.tangoId,
+      razon_social:      data.businessName,
+      cuit:              data.documentNumber,
+      vendedor:          data.sellerCode,
+      localidad:         data.city,
+      codigo_postal:     data.postalCode,
+      provincia:         data.provinceCode,
+      direccion:         data.address,
+      entrega_lunes:     data.deliveryDays.monday,
+      entrega_martes:    data.deliveryDays.tuesday,
+      entrega_miercoles: data.deliveryDays.wednesday,
+      entrega_jueves:    data.deliveryDays.thursday,
+      entrega_viernes:   data.deliveryDays.friday,
+      entrega_sabado:    data.deliveryDays.saturday,
+      entrega_domingo:   data.deliveryDays.sunday,
+    },
+  };
+  if (data.phone) payload.phone_number = data.phone;
+  if (data.email) payload.email        = data.email;
+
+  // Buscar por teléfono si tiene
+  if (data.phone) {
+    const searchRes = await fetch(
+      accountUrl(`/contacts/search?q=${encodeURIComponent(data.phone)}&page=1`),
+      { headers: agentHeaders() },
+    );
+    if (searchRes.ok) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const body = (await searchRes.json()) as any;
+      const list: { id: number }[] = Array.isArray(body?.payload) ? body.payload : [];
+      if (list.length > 0 && list[0].id) {
+        const id = list[0].id;
+        await fetch(accountUrl(`/contacts/${id}`), {
+          method: "PATCH",
+          headers: agentHeaders(),
+          body: JSON.stringify(payload),
+        });
+        return id;
+      }
+    }
+  }
+
+  // Crear si no existe
+  const createRes = await fetch(accountUrl("/contacts"), {
+    method: "POST",
+    headers: agentHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!createRes.ok) {
+    throw new Error(
+      `upsertChatwootContact (${data.tangoId}) falló (${createRes.status}): ${await createRes.text()}`,
+    );
+  }
+  return extractId(await createRes.json(), `upsertChatwootContact(${data.tangoId})`);
+}
+
 // ── Difusiones salientes (campañas) ──────────────────────────────────────
 
 // Extrae el id de una respuesta de Chatwoot que puede venir como

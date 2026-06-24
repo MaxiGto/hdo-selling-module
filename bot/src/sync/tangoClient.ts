@@ -3,6 +3,9 @@ import { config } from "../config.js";
 // Schema real del endpoint GET /api/Aperture/Customer (verificado 2026-06-23).
 interface TangoShippingAddress {
   Code: string;
+  Address?: string;
+  City?: string;
+  PostalCode?: string;
   PhoneNumber1?: string;
   PhoneNumber2?: string;
   DefaultAddress: "S" | "N";
@@ -20,13 +23,18 @@ interface TangoCustomer {
   Code: string;
   BusinessName?: string;
   TradeName?: string;
+  Address?: string;
+  PostalCode?: string;
+  City?: string;
   ProvinceCode?: string;
-  PhoneNumbers?: string;         // teléfono principal (puede tener múltiples separados por coma)
+  PhoneNumbers?: string;
   MobilePhoneNumber?: string;
   Email?: string;
-  SellerCode?: string;           // código del vendedor asignado → base para zona
+  DocumentType?: string;
+  DocumentNumber?: string;       // CUIT/DNI
+  SellerCode?: string;
   ShippingAddresses?: TangoShippingAddress[];
-  DisabledDate?: string | null;  // null = activo
+  DisabledDate?: string | null;
 }
 
 interface TangoPage {
@@ -77,10 +85,15 @@ function bestPhone(c: TangoCustomer): string | null {
 export interface TangoCustomerFlat {
   tangoId: string;
   name: string;
+  businessName: string | null;   // razón social (BusinessName)
   phone: string | null;
+  email: string | null;
+  address: string | null;        // dirección de entrega principal
+  city: string | null;
+  postalCode: string | null;
   provinceCode: string | null;
+  documentNumber: string | null; // CUIT/DNI
   sellerCode: string | null;
-  // Días de entrega de la dirección principal (true = entrega ese día)
   deliveryDays: {
     monday: boolean; tuesday: boolean; wednesday: boolean;
     thursday: boolean; friday: boolean; saturday: boolean; sunday: boolean;
@@ -91,13 +104,20 @@ function flattenCustomer(c: TangoCustomer): TangoCustomerFlat {
   const name = c.TradeName?.trim() || c.BusinessName?.trim() || `Cliente ${c.Code}`;
   const defaultAddr = c.ShippingAddresses?.find((a) => a.DefaultAddress === "S");
   const flag = (v?: string) => v === "S";
+  const str = (v?: string) => v?.trim() || null;
 
   return {
-    tangoId:      c.Code,
+    tangoId:        c.Code,
     name,
-    phone:        bestPhone(c),
-    provinceCode: c.ProvinceCode?.trim() ?? null,
-    sellerCode:   c.SellerCode?.trim() ?? null,
+    businessName:   str(c.BusinessName),
+    phone:          bestPhone(c),
+    email:          str(c.Email),
+    address:        str(defaultAddr?.Address ?? c.Address),
+    city:           str(defaultAddr?.City ?? c.City),
+    postalCode:     str(defaultAddr?.PostalCode ?? c.PostalCode),
+    provinceCode:   str(c.ProvinceCode),
+    documentNumber: str(c.DocumentNumber),
+    sellerCode:     str(c.SellerCode),
     deliveryDays: {
       monday:    flag(defaultAddr?.DeliversMonday),
       tuesday:   flag(defaultAddr?.DeliversTuesday),
