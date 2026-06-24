@@ -7,7 +7,8 @@
 {$CHATWOOT_DOMAIN} {
 	# Webhook de eventos (conversation_status_changed, etc.) → bot
 	handle /bot/events {
-		reverse_proxy bot:3000/chatwoot/events
+		rewrite * /chatwoot/events
+		reverse_proxy bot:3000
 	}
 
 	reverse_proxy rails:3000

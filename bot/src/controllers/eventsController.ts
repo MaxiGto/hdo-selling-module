@@ -11,10 +11,10 @@ export function handleChatwootEvent(req: Request, res: Response): void {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function processEvent(payload: any): Promise<void> {
   try {
+    console.log(`[events] evento recibido: ${payload?.event} | status: ${payload?.status} | id: ${payload?.id}`);
+
     if (payload?.event !== "conversation_status_changed") return;
 
-    // Cuando el asesor resuelve la conversación, el bot puede volver a atender
-    // al cliente en la próxima conversación que abra.
     if (payload?.status === "resolved") {
       const conversationId: unknown = payload?.id;
       if (typeof conversationId !== "number") return;
