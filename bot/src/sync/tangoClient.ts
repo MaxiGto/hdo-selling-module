@@ -101,7 +101,9 @@ export interface TangoCustomerFlat {
 }
 
 function flattenCustomer(c: TangoCustomer): TangoCustomerFlat {
-  const name = c.TradeName?.trim() || c.BusinessName?.trim() || `Cliente ${c.Code}`;
+  // Nombre visible: "C7D001 - 7 DE ORO S.R.L." (BusinessName primero, TradeName como fallback)
+  const displayName = c.BusinessName?.trim() || c.TradeName?.trim() || "";
+  const name = displayName ? `${c.Code} - ${displayName}` : c.Code;
   const defaultAddr = c.ShippingAddresses?.find((a) => a.DefaultAddress === "S");
   const flag = (v?: string) => v === "S";
   const str = (v?: string) => v?.trim() || null;
