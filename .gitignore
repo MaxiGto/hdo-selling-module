@@ -7,3 +7,14 @@ bot/dist
 
 # Logs
 *.log
+
+# Office temp files
+~$*
+
+# Archivos binarios grandes (presentaciones, etc.)
+*.pptx
+*.xlsx
+*.docx
+
+# package-lock (el proyecto usa pnpm)
+**/package-lock.json
