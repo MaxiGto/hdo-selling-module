@@ -29,11 +29,14 @@ async function processEvent(payload: any): Promise<void> {
       processedMessageIds.add(messageId);
     }
 
-    const content: string = String(payload?.content ?? "").trim();
     const conversationId: unknown = payload?.conversation?.id;
-    if (!content || typeof conversationId !== "number") return;
+    if (typeof conversationId !== "number") return;
 
-    // Asegura que la conversación esté "open" (Chatwoot la crea como "pending" con Agent Bot)
+    const content: string = String(payload?.content ?? "").trim();
+    const hasAttachment =
+      Array.isArray(payload?.attachments) && payload.attachments.length > 0;
+
+    // Asegura que la conversación esté "open" para todos los mensajes entrantes
     openConversation(conversationId);
 
     // Conversación derivada a un asesor → el bot no interviene más
@@ -41,6 +44,17 @@ async function processEvent(payload: any): Promise<void> {
       console.log(`[bot] conv. ${conversationId} derivada a asesor, ignorando`);
       return;
     }
+
+    // Mensaje sin texto (audio, imagen, documento, sticker, etc.)
+    if (!content && hasAttachment) {
+      await sendMessage(
+        conversationId,
+        "Para armar tu pedido necesito que me lo pases por escrito, con el nombre del producto y la cantidad. ¿Me lo mandás en texto? ✍️",
+      );
+      return;
+    }
+
+    if (!content) return;
 
     const result = await generateReply(conversationId, content);
 
