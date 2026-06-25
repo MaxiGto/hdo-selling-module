@@ -50,17 +50,20 @@ export function normalizeArgentinePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, "");
   if (!digits) return null;
 
-  // Ya tiene código de país completo
-  if (digits.startsWith("54") && digits.length >= 12) return "+" + digits;
+  // Ya tiene código de país completo — quitar el 9 si está presente (+549... → +54...)
+  if (digits.startsWith("54") && digits.length >= 12) {
+    const rest = digits.slice(2); // sin "54"
+    return "+54" + (rest.startsWith("9") ? rest.slice(1) : rest);
+  }
 
   // Quita prefijo troncal 0
   const local = digits.startsWith("0") ? digits.slice(1) : digits;
 
-  // 11 dígitos comenzando con 9 → ya tiene indicador de celular → +54
-  if (local.length === 11 && local.startsWith("9")) return "+54" + local;
+  // 11 dígitos comenzando con 9 → quitar el 9
+  if (local.length === 11 && local.startsWith("9")) return "+54" + local.slice(1);
 
-  // 10 dígitos → celular sin indicador → +549
-  if (local.length === 10) return "+549" + local;
+  // 10 dígitos → directo, sin indicador de celular
+  if (local.length === 10) return "+54" + local;
 
   return null;
 }
