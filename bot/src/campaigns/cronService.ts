@@ -13,6 +13,10 @@ const DOW: Record<"monday" | "tuesday" | "wednesday" | "thursday" | "friday", nu
 };
 
 export function startCrons(): void {
+  if (process.env.DISABLE_CRONS === "true") {
+    console.log("[cron] deshabilitado por DISABLE_CRONS=true — no se programan tareas");
+    return;
+  }
   // Limpieza de handoffs: todos los días a las 00:00 hs.
   // Libera conversaciones donde ningún asesor respondió durante el día.
   schedule("0 0 * * *", () => {
