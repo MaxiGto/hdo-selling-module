@@ -28,10 +28,10 @@ export interface CampaignDefinition {
 }
 
 const TEMPLATE_VARS = {
-  "1": "{{delivery.dayName}}",
-  "2": "{{delivery.date}}",
-  "3": "{{end.dayName}}",
-  "4": "10AM",
+  order_day:  "{{delivery.dayName}}",
+  order_date: "{{delivery.date}}",
+  end_day:    "{{end.dayName}}",
+  end_time:   "10AM",
 };
 
 export const CAMPAIGNS: CampaignDefinition[] = [
