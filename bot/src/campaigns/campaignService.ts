@@ -33,6 +33,7 @@ function buildDateTokens(deliveryDateOffset: number, endDayOffset: number): Reco
     "{{delivery.dayName}}": DAY_NAMES_ES[delivery.getUTCDay()] ?? "",
     "{{delivery.date}}":    `${delivery.getUTCDate()}/${delivery.getUTCMonth() + 1}`,
     "{{end.dayName}}":      DAY_NAMES_ES[endDay.getUTCDay()] ?? "",
+    "{{end.date}}":         `${endDay.getUTCDate()}/${endDay.getUTCMonth() + 1}`,
   };
 }
 

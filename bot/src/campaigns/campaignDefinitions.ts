@@ -31,7 +31,7 @@ const TEMPLATE_VARS = {
   order_day:  "{{delivery.dayName}}",
   order_date: "{{delivery.date}}",
   end_day:    "{{end.dayName}}",
-  end_time:   "10AM",
+  end_date:   "{{end.date}}",
 };
 
 export const CAMPAIGNS: CampaignDefinition[] = [
