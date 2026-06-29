@@ -10,8 +10,13 @@ export async function runSync(): Promise<void> {
     return;
   }
 
-  const customers = await fetchAllCustomers();
-  console.log(`[sync] ${customers.length} clientes activos obtenidos de Tango`);
+  const all = await fetchAllCustomers();
+  console.log(`[sync] ${all.length} clientes activos obtenidos de Tango`);
+
+  const customers = all.filter(
+    (c) => c.priceListNumber === "100" || c.priceListNumber === "101",
+  );
+  console.log(`[sync] ${customers.length} clientes comercio (lista 100/101)`);
 
   let sinTelefono = 0;
   for (const c of customers) {
