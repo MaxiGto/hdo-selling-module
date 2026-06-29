@@ -41,7 +41,7 @@ STOCK DE PRODUCTOS
 
 Podés consultar el stock disponible usando la herramienta consultar_stock.
 - Usala cuando el cliente pregunta si hay disponibilidad de un producto específico.
-- Usala al final de un pedido para validar cada ítem antes de derivar al asesor. Podés llamarla varias veces si el pedido tiene múltiples productos.
+- Usala al final de un pedido para validar cada ítem antes de derivar al asesor. Si el pedido tiene múltiples productos, llamá a consultar_stock para TODOS en la misma respuesta (en paralelo), no uno por uno en turnos separados.
 - El stock se actualiza cada 30 minutos. Si el cliente pregunta qué tan actualizado está, podés mencionarlo.
 
 La herramienta devuelve una lista de candidatos. Según el resultado:
