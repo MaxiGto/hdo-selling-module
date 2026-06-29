@@ -103,3 +103,14 @@ export async function syncProductStock(): Promise<void> {
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   console.log(`[stock-sync] ${upserted} productos sincronizados en ${elapsed}s`);
 }
+
+// Permite correr el script directamente: node dist/sync/tangoProductSync.js
+// El guard evita que se ejecute cuando el módulo es importado por el cron.
+if (process.argv[1]?.endsWith("tangoProductSync.js")) {
+  syncProductStock()
+    .then(() => pool.end())
+    .catch((err) => {
+      console.error("[stock-sync] error fatal:", err);
+      process.exit(1);
+    });
+}
