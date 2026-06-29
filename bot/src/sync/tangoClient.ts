@@ -33,6 +33,7 @@ interface TangoCustomer {
   DocumentType?: string;
   DocumentNumber?: string;       // CUIT/DNI
   SellerCode?: string;
+  PriceListNumber?: number | string | null;
   ShippingAddresses?: TangoShippingAddress[];
   DisabledDate?: string | null;
 }
@@ -97,6 +98,7 @@ export interface TangoCustomerFlat {
   provinceCode: string | null;
   documentNumber: string | null; // CUIT/DNI
   sellerCode: string | null;
+  priceListNumber: string | null;
   deliveryDays: {
     monday: boolean; tuesday: boolean; wednesday: boolean;
     thursday: boolean; friday: boolean; saturday: boolean; sunday: boolean;
@@ -122,7 +124,8 @@ function flattenCustomer(c: TangoCustomer): TangoCustomerFlat {
     postalCode:     str(defaultAddr?.PostalCode ?? c.PostalCode),
     provinceCode:   str(c.ProvinceCode),
     documentNumber: str(c.DocumentNumber),
-    sellerCode:     str(c.SellerCode),
+    sellerCode:      str(c.SellerCode),
+    priceListNumber: c.PriceListNumber != null ? String(c.PriceListNumber) : null,
     deliveryDays: {
       monday:    flag(defaultAddr?.DeliversMonday),
       tuesday:   flag(defaultAddr?.DeliversTuesday),
