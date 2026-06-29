@@ -7,9 +7,21 @@ export interface StockResult {
   available: number;
 }
 
-// Busca productos por descripción o SKU (insensible a mayúsculas).
-// Devuelve hasta 5 coincidencias ordenadas por descripción.
+// Búsqueda amplia por palabras sueltas (OR): devuelve hasta 15 candidatos
+// ordenados por cantidad de palabras coincidentes. El modelo evalúa cuál
+// es el match correcto y, si hay ambigüedad, presenta lista numerada al cliente.
 export async function searchStock(query: string): Promise<StockResult[]> {
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+
+  const params: string[] = words.map((w) => `%${w}%`);
+
+  // Cada palabra genera una condición ILIKE; se ranquean primero los que
+  // coinciden con más palabras del query.
+  const wordConditions = words.map((_, i) => `description ILIKE $${i + 1}`);
+  const scoreExpr = wordConditions.map((c) => `CASE WHEN ${c} THEN 1 ELSE 0 END`).join(" + ");
+  const whereClause = `${wordConditions.join(" OR ")} OR sku_code ILIKE $1`;
+
   const { rows } = await pool.query<{
     sku_code: string;
     description: string;
@@ -19,10 +31,10 @@ export async function searchStock(query: string): Promise<StockResult[]> {
   }>(
     `SELECT sku_code, description, additional_description, quantity, engaged_quantity
      FROM product_stock_cache
-     WHERE description ILIKE $1 OR sku_code ILIKE $1
-     ORDER BY description
-     LIMIT 5`,
-    [`%${query}%`],
+     WHERE ${whereClause}
+     ORDER BY (${scoreExpr}) DESC, description
+     LIMIT 15`,
+    params,
   );
 
   return rows.map((r) => ({
@@ -33,16 +45,17 @@ export async function searchStock(query: string): Promise<StockResult[]> {
   }));
 }
 
-// Formatea resultados de stock como texto para pasar al modelo.
+// Formatea candidatos para que el modelo los evalúe.
+// Con un solo resultado claro, el modelo responde directo.
+// Con varios candidatos, el modelo presenta la lista numerada al cliente.
 export function formatStockResults(query: string, results: StockResult[]): string {
   if (results.length === 0) {
-    return `No encontré "${query}" en el catálogo.`;
+    return `No encontré ningún producto que coincida con "${query}" en el catálogo.`;
   }
-  return results
-    .map((r) => {
-      const format = r.additionalDescription ? ` (${r.additionalDescription})` : "";
-      const stockLabel = r.available > 0 ? `${r.available} disponibles` : "sin stock";
-      return `${r.description}${format} [${r.skuCode}]: ${stockLabel}`;
-    })
-    .join("\n");
+  const lines = results.map((r, i) => {
+    const format = r.additionalDescription ? ` (${r.additionalDescription})` : "";
+    const stockLabel = r.available > 0 ? `${r.available} disponibles` : "sin stock";
+    return `${i + 1}. ${r.description}${format} [${r.skuCode}]: ${stockLabel}`;
+  });
+  return `Candidatos para "${query}":\n${lines.join("\n")}`;
 }
