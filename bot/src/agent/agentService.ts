@@ -76,6 +76,15 @@ function buildMessages(history: ChatwootMessage[]): Anthropic.MessageParam[] {
   return collapsed;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), ms),
+    ),
+  ]);
+}
+
 // Genera la respuesta del agente con historial completo de la conversación.
 // Loop agentic: el modelo puede llamar consultar_stock N veces antes de responder.
 export async function generateReply(
@@ -117,17 +126,27 @@ export async function generateReply(
     // Consultas de stock: puede haber varias en la misma respuesta
     const stockTools = toolUses.filter((t) => t.name === "consultar_stock");
     if (stockTools.length > 0) {
-      const toolResults = await Promise.all(
-        stockTools.map(async (t) => {
-          const { query, cantidad } = t.input as { query: string; cantidad?: number };
-          const results = await searchStock(query);
-          return {
-            type: "tool_result" as const,
-            tool_use_id: t.id,
-            content: formatStockResults(query, results, cantidad),
-          };
-        }),
-      );
+      let toolResults;
+      try {
+        toolResults = await Promise.all(
+          stockTools.map(async (t) => {
+            const { query, cantidad } = t.input as { query: string; cantidad?: number };
+            const results = await withTimeout(searchStock(query), 60_000);
+            return {
+              type: "tool_result" as const,
+              tool_use_id: t.id,
+              content: formatStockResults(query, results, cantidad),
+            };
+          }),
+        );
+      } catch (err) {
+        console.error("[agent] error en consultar_stock:", err);
+        return {
+          type: "handoff",
+          motivo: "error en validación de stock",
+          mensaje: "Te paso con un asesor para que te confirme la disponibilidad de los productos.",
+        };
+      }
 
       messages = [
         ...messages,
