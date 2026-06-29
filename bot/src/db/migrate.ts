@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS handoffs (
   motivo           TEXT,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Caché de productos y stock de Tango, actualizada cada 30 minutos por cron.
+-- El bot consulta esta tabla (en lugar de llamar a Tango directamente) para
+-- responder consultas de stock sin latencia ni carga sobre la API externa.
+CREATE TABLE IF NOT EXISTS product_stock_cache (
+  sku_code               TEXT PRIMARY KEY,
+  tango_id               INTEGER,
+  description            TEXT NOT NULL,
+  additional_description TEXT,
+  bar_code               TEXT,
+  quantity               NUMERIC NOT NULL DEFAULT 0,
+  engaged_quantity       NUMERIC NOT NULL DEFAULT 0,
+  last_synced_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;
 
 export async function runMigrations(): Promise<void> {

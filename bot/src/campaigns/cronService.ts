@@ -2,6 +2,7 @@ import { schedule } from "node-cron";
 import { CAMPAIGNS } from "./campaignDefinitions.js";
 import { runCampaign } from "./campaignService.js";
 import { runSync } from "../sync/syncService.js";
+import { syncProductStock } from "../sync/tangoProductSync.js";
 import { clearAllHandoffs } from "../agent/handoffRepository.js";
 
 // Zona horaria de Argentina (UTC-3, sin DST).
@@ -29,6 +30,10 @@ export function startCrons(): void {
   // Sync nocturno con Tango: todos los días a las 3:00 hs.
   schedule("0 3 * * *", () => void runSync(), { timezone: TZ });
   console.log("[cron] sync Tango → todos los días 03:00 hs (ART)");
+
+  // Sync de stock cada 30 minutos (productos + cantidades por depósito).
+  schedule("*/30 * * * *", () => void syncProductStock(), { timezone: TZ });
+  console.log("[cron] sync stock → cada 30 minutos");
 
   // 5 difusiones: lunes a viernes a las 9:00 hs.
   // Cada una envía a los clientes que reciben entrega 2 días hábiles después.

@@ -20,6 +20,8 @@ export const config = {
     // URL base de la API de Tango Nexo Tiendas.
     baseUrl: process.env.TANGO_API_BASE_URL ?? "https://tiendas.axoft.com",
     accessToken: process.env.TANGO_ACCESS_TOKEN ?? "",
+    // Tamaño de página para todos los endpoints de Tango (productos, stock, clientes).
+    pageSize: Number(process.env.TANGO_PAGE_SIZE ?? 5000),
   },
 };
 

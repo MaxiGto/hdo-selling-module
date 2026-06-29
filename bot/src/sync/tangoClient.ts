@@ -43,7 +43,7 @@ interface TangoPage {
   Data: TangoCustomer[];
 }
 
-const PAGE_SIZE = 500;
+const PAGE_SIZE = config.tango.pageSize;
 
 // Normaliza un número argentino a formato E.164 (+549XXXXXXXXXX).
 // Cubre los formatos más comunes en Tango; retorna null si no se puede resolver.
