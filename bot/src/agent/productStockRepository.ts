@@ -46,15 +46,26 @@ export async function searchStock(query: string): Promise<StockResult[]> {
 }
 
 // Formatea candidatos para que el modelo los evalúe.
-// Con un solo resultado claro, el modelo responde directo.
-// Con varios candidatos, el modelo presenta la lista numerada al cliente.
-export function formatStockResults(query: string, results: StockResult[]): string {
+// Nunca expone cantidades exactas: solo indica si hay stock suficiente para
+// la cantidad pedida, o si hay/no hay stock en caso de consulta libre.
+export function formatStockResults(
+  query: string,
+  results: StockResult[],
+  cantidadPedida?: number,
+): string {
   if (results.length === 0) {
     return `No encontré ningún producto que coincida con "${query}" en el catálogo.`;
   }
   const lines = results.map((r, i) => {
     const format = r.additionalDescription ? ` (${r.additionalDescription})` : "";
-    const stockLabel = r.available > 0 ? `${r.available} disponibles` : "sin stock";
+    const stockLabel =
+      cantidadPedida !== undefined
+        ? r.available >= cantidadPedida
+          ? "stock suficiente"
+          : "stock insuficiente"
+        : r.available > 0
+          ? "hay stock"
+          : "sin stock";
     return `${i + 1}. ${r.description}${format} [${r.skuCode}]: ${stockLabel}`;
   });
   return `Candidatos para "${query}":\n${lines.join("\n")}`;

@@ -41,6 +41,10 @@ const STOCK_TOOL: Anthropic.Tool = {
         type: "string",
         description: "Nombre o código del producto a buscar (ej: 'romero', 'té verde jengibre', '08INF093')",
       },
+      cantidad: {
+        type: "number",
+        description: "Cantidad que el cliente pidió (opcional). Si se indica, la respuesta dirá si hay stock suficiente para esa cantidad.",
+      },
     },
     required: ["query"],
   },
@@ -115,12 +119,12 @@ export async function generateReply(
     if (stockTools.length > 0) {
       const toolResults = await Promise.all(
         stockTools.map(async (t) => {
-          const { query } = t.input as { query: string };
+          const { query, cantidad } = t.input as { query: string; cantidad?: number };
           const results = await searchStock(query);
           return {
             type: "tool_result" as const,
             tool_use_id: t.id,
-            content: formatStockResults(query, results),
+            content: formatStockResults(query, results, cantidad),
           };
         }),
       );
