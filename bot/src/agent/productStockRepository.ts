@@ -26,7 +26,7 @@ export async function searchStock(query: string): Promise<StockResult[]> {
   const whereClause = [
     ...wordConditions,
     `sku_code ILIKE $1`,
-    `similarity(unaccent(description), unaccent(${simParam})) > 0.3`,
+    `word_similarity(unaccent(${simParam}), unaccent(description)) > 0.3`,
   ].join(" OR ");
 
   const { rows } = await pool.query<{
