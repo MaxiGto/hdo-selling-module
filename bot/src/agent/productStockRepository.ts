@@ -16,9 +16,9 @@ export async function searchStock(query: string): Promise<StockResult[]> {
 
   const params: string[] = words.map((w) => `%${w}%`);
 
-  // Cada palabra genera una condición ILIKE; se ranquean primero los que
-  // coinciden con más palabras del query.
-  const wordConditions = words.map((_, i) => `description ILIKE $${i + 1}`);
+  // unaccent() normaliza tildes en ambos lados: "cedrón" matchea "CEDRON" y viceversa.
+  // Se ranquean primero los que coinciden con más palabras del query.
+  const wordConditions = words.map((_, i) => `unaccent(description) ILIKE unaccent($${i + 1})`);
   const scoreExpr = wordConditions.map((c) => `CASE WHEN ${c} THEN 1 ELSE 0 END`).join(" + ");
   const whereClause = `${wordConditions.join(" OR ")} OR sku_code ILIKE $1`;
 
