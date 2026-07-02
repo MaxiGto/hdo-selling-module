@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { generateReply } from "../agent/agentService.js";
 import { isHandedOff, markHandedOff } from "../agent/handoffRepository.js";
 import { sendMessage, openConversation } from "../chatwoot/chatwootClient.js";
+import { resetNoResponseStreak } from "../contacts/contactRepository.js";
 
 // Idempotencia básica: evita procesar el mismo message.id dos veces en el mismo proceso.
 const processedMessageIds = new Set<number>();
@@ -38,6 +39,12 @@ async function processEvent(payload: any): Promise<void> {
 
     // Asegura que la conversación esté "open" para todos los mensajes entrantes
     openConversation(conversationId);
+
+    // El cliente respondió → resetear streak de no-respuesta
+    const chatwootContactId = payload?.conversation?.meta?.sender?.id;
+    if (typeof chatwootContactId === "number") {
+      void resetNoResponseStreak(chatwootContactId);
+    }
 
     // Conversación derivada a un asesor → el bot no interviene más
     if (await isHandedOff(conversationId)) {

@@ -101,6 +101,27 @@ export async function setChatwootContactId(
   );
 }
 
+// Incrementa el streak de no-respuesta al enviar una difusión.
+// Si llega a 2, activa opt_out automáticamente.
+export async function incrementNoResponseStreak(contactId: number): Promise<void> {
+  await pool.query(
+    `UPDATE contacts
+     SET no_response_streak = no_response_streak + 1,
+         opt_out = CASE WHEN no_response_streak + 1 >= 2 THEN TRUE ELSE opt_out END
+     WHERE id = $1`,
+    [contactId],
+  );
+}
+
+// Resetea el streak cuando el cliente manda cualquier mensaje.
+// Busca por chatwoot_contact_id (disponible en el payload del webhook).
+export async function resetNoResponseStreak(chatwootContactId: number): Promise<void> {
+  await pool.query(
+    `UPDATE contacts SET no_response_streak = 0 WHERE chatwoot_contact_id = $1`,
+    [chatwootContactId],
+  );
+}
+
 // Cuántos contactos quedaron sin ningún día de entrega configurado.
 export async function countWithoutDeliveryDays(): Promise<number> {
   const { rows } = await pool.query<{ count: string }>(

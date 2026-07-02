@@ -64,7 +64,13 @@ CREATE TABLE IF NOT EXISTS product_stock_cache (
 );
 `;
 
+// Migraciones incrementales (ALTER): seguras de correr en cada deploy.
+const MIGRATIONS = `
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS no_response_streak INTEGER NOT NULL DEFAULT 0;
+`;
+
 export async function runMigrations(): Promise<void> {
   await pool.query(SQL);
+  await pool.query(MIGRATIONS);
   console.log("[db] migraciones OK");
 }

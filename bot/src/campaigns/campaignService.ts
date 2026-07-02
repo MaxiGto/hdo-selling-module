@@ -1,4 +1,4 @@
-import { getAudienceByDeliveryDay, setChatwootContactId } from "../contacts/contactRepository.js";
+import { getAudienceByDeliveryDay, setChatwootContactId, incrementNoResponseStreak } from "../contacts/contactRepository.js";
 import {
   findOrCreateContact,
   createConversation,
@@ -103,6 +103,7 @@ export async function runCampaign(def: CampaignDefinition): Promise<void> {
          VALUES ($1, $2, 'sent')`,
         [runId, contact.id],
       );
+      await incrementNoResponseStreak(contact.id);
       sent++;
     } catch (err) {
       console.error(`[campaign] error con contacto ${contact.tangoId}:`, err);
