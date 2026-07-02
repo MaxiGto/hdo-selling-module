@@ -14,13 +14,20 @@ export async function searchStock(query: string): Promise<StockResult[]> {
   const words = query.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
 
+  // Params: palabras como %word% para ILIKE, query completo al final para similarity.
   const params: string[] = words.map((w) => `%${w}%`);
+  params.push(query);
+  const simParam = `$${params.length}`;
 
-  // unaccent() normaliza tildes en ambos lados: "cedrón" matchea "CEDRON" y viceversa.
-  // Se ranquean primero los que coinciden con más palabras del query.
+  // unaccent() normaliza tildes. pg_trgm similarity() tolera typos (umbral 0.3).
+  // Prioridad: más palabras coincidentes primero, luego mayor similitud.
   const wordConditions = words.map((_, i) => `unaccent(description) ILIKE unaccent($${i + 1})`);
   const scoreExpr = wordConditions.map((c) => `CASE WHEN ${c} THEN 1 ELSE 0 END`).join(" + ");
-  const whereClause = `${wordConditions.join(" OR ")} OR sku_code ILIKE $1`;
+  const whereClause = [
+    ...wordConditions,
+    `sku_code ILIKE $1`,
+    `similarity(unaccent(description), unaccent(${simParam})) > 0.3`,
+  ].join(" OR ");
 
   const { rows } = await pool.query<{
     sku_code: string;
@@ -32,7 +39,9 @@ export async function searchStock(query: string): Promise<StockResult[]> {
     `SELECT sku_code, description, additional_description, quantity, engaged_quantity
      FROM product_stock_cache
      WHERE ${whereClause}
-     ORDER BY (${scoreExpr}) DESC, description
+     ORDER BY (${scoreExpr}) DESC,
+              similarity(unaccent(description), unaccent(${simParam})) DESC,
+              description
      LIMIT 15`,
     params,
   );
