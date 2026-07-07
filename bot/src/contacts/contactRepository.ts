@@ -58,6 +58,7 @@ export async function upsertContact(data: {
   phoneNormalized: string;
   provinceCode: string | null;
   sellerCode: string | null;
+  priceListNumber: string | null;
   deliveryDays: {
     monday: boolean; tuesday: boolean; wednesday: boolean;
     thursday: boolean; friday: boolean; saturday: boolean; sunday: boolean;
@@ -66,15 +67,16 @@ export async function upsertContact(data: {
   const d = data.deliveryDays;
   await pool.query(
     `INSERT INTO contacts
-       (tango_id, name, phone_normalized, province_code, seller_code,
+       (tango_id, name, phone_normalized, province_code, seller_code, price_list_number,
         delivers_monday, delivers_tuesday, delivers_wednesday, delivers_thursday,
         delivers_friday, delivers_saturday, delivers_sunday, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, NOW())
      ON CONFLICT (tango_id) DO UPDATE SET
        name               = EXCLUDED.name,
        phone_normalized   = EXCLUDED.phone_normalized,
        province_code      = EXCLUDED.province_code,
        seller_code        = EXCLUDED.seller_code,
+       price_list_number  = EXCLUDED.price_list_number,
        delivers_monday    = EXCLUDED.delivers_monday,
        delivers_tuesday   = EXCLUDED.delivers_tuesday,
        delivers_wednesday = EXCLUDED.delivers_wednesday,
@@ -85,9 +87,25 @@ export async function upsertContact(data: {
        synced_at          = NOW()`,
     [
       data.tangoId, data.name, data.phoneNormalized, data.provinceCode, data.sellerCode,
+      data.priceListNumber,
       d.monday, d.tuesday, d.wednesday, d.thursday, d.friday, d.saturday, d.sunday,
     ],
   );
+}
+
+// Devuelve "C", "D", "D+" según el price_list_number del cliente en la DB del bot.
+// Retorna null si el contacto no existe o no tiene categoría conocida.
+export async function getCategoryByChatwootId(chatwootContactId: number): Promise<string | null> {
+  const { rows } = await pool.query<{ price_list_number: string | null }>(
+    `SELECT price_list_number FROM contacts WHERE chatwoot_contact_id = $1 LIMIT 1`,
+    [chatwootContactId],
+  );
+  const pl = rows[0]?.price_list_number;
+  if (!pl) return null;
+  if (pl === "100" || pl === "101") return "C";
+  if (pl === "300" || pl === "301") return "D";
+  if (pl === "400" || pl === "401") return "D+";
+  return null;
 }
 
 // Guarda el ID de Chatwoot una vez que se crea el contacto allá.

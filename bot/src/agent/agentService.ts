@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config.js";
-import { SYSTEM_PROMPT } from "./guidelines.js";
+import { buildSystemPrompt } from "./guidelines.js";
 import { fetchConversationMessages, type ChatwootMessage } from "../chatwoot/chatwootClient.js";
 import { searchStock, formatStockResults } from "./productStockRepository.js";
 
@@ -90,7 +90,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 export async function generateReply(
   conversationId: number,
   currentMessage: string,
+  clientCategory?: string | null,
 ): Promise<AgentResult> {
+  const systemPrompt = buildSystemPrompt(clientCategory ?? null);
   const history = await fetchConversationMessages(conversationId, 30);
   let messages = buildMessages(history);
 
@@ -103,7 +105,7 @@ export async function generateReply(
     const response = await client.messages.create({
       model: config.model,
       max_tokens: 512,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       tools: [HANDOFF_TOOL, STOCK_TOOL],
       messages,
     });

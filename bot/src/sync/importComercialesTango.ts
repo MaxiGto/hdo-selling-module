@@ -39,10 +39,11 @@ async function main(): Promise<void> {
   const all = await fetchAllCustomers();
   console.log(`[import] ${all.length} clientes activos en Tango`);
 
-  const comerciales = all.filter((c) => c.priceListNumber === "100" || c.priceListNumber === "101");
-  console.log(`[import] ${comerciales.length} con lista de precios 100 o 101`);
+  const SYNCED_LISTS = new Set(["100", "101", "300", "301", "400", "401"]);
+  const filtrados = all.filter((c) => SYNCED_LISTS.has(c.priceListNumber ?? ""));
+  console.log(`[import] ${filtrados.length} con lista de precios 100/101 (comercio) o 300/301/400/401 (distribuidores)`);
 
-  const { unique: customers, skipped: dupSkipped } = deduplicateByPhone(comerciales);
+  const { unique: customers, skipped: dupSkipped } = deduplicateByPhone(filtrados);
   const sinTelefono = customers.filter((c) => !c.phone).length;
   const conTelefono = customers.filter((c) => c.phone).length;
   console.log(`[import] ${dupSkipped} duplicados por teléfono omitidos`);
@@ -67,6 +68,7 @@ async function main(): Promise<void> {
         phoneNormalized: c.phone,
         provinceCode:    c.provinceCode,
         sellerCode:      c.sellerCode,
+        priceListNumber: c.priceListNumber,
         deliveryDays:    c.deliveryDays,
       });
 

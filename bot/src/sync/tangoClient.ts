@@ -105,10 +105,19 @@ export interface TangoCustomerFlat {
   };
 }
 
+function categoryLabel(priceListNumber: string | null): string {
+  if (priceListNumber === "100" || priceListNumber === "101") return "/C";
+  if (priceListNumber === "300" || priceListNumber === "301") return "/D";
+  if (priceListNumber === "400" || priceListNumber === "401") return "/D+";
+  return "";
+}
+
 function flattenCustomer(c: TangoCustomer): TangoCustomerFlat {
-  // Nombre visible: "C7D001 - 7 DE ORO S.R.L." (BusinessName primero, TradeName como fallback)
+  // Nombre visible: "C7D001/C - 7 DE ORO S.R.L." — el sufijo identifica la categoría del cliente.
   const displayName = c.BusinessName?.trim() || c.TradeName?.trim() || "";
-  const name = displayName ? `${c.Code} - ${displayName}` : c.Code;
+  const priceListNum = c.PriceListNumber != null ? String(c.PriceListNumber) : null;
+  const label = categoryLabel(priceListNum);
+  const name = displayName ? `${c.Code}${label} - ${displayName}` : `${c.Code}${label}`;
   const defaultAddr = c.ShippingAddresses?.find((a) => a.DefaultAddress === "S");
   const flag = (v?: string) => v === "S";
   const str = (v?: string) => v?.trim() || null;
@@ -125,7 +134,7 @@ function flattenCustomer(c: TangoCustomer): TangoCustomerFlat {
     provinceCode:   str(c.ProvinceCode),
     documentNumber: str(c.DocumentNumber),
     sellerCode:      str(c.SellerCode),
-    priceListNumber: c.PriceListNumber != null ? String(c.PriceListNumber) : null,
+    priceListNumber: priceListNum,
     deliveryDays: {
       monday:    flag(defaultAddr?.DeliversMonday),
       tuesday:   flag(defaultAddr?.DeliversTuesday),

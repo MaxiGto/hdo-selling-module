@@ -67,6 +67,7 @@ async function main(): Promise<void> {
         phoneNormalized: c.phone,
         provinceCode:    c.provinceCode,
         sellerCode:      c.sellerCode,
+        priceListNumber: c.priceListNumber,
         deliveryDays:    c.deliveryDays,
       });
 

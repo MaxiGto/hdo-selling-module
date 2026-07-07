@@ -13,10 +13,9 @@ export async function runSync(): Promise<void> {
   const all = await fetchAllCustomers();
   console.log(`[sync] ${all.length} clientes activos obtenidos de Tango`);
 
-  const customers = all.filter(
-    (c) => c.priceListNumber === "100" || c.priceListNumber === "101",
-  );
-  console.log(`[sync] ${customers.length} clientes comercio (lista 100/101)`);
+  const SYNCED_LISTS = new Set(["100", "101", "300", "301", "400", "401"]);
+  const customers = all.filter((c) => SYNCED_LISTS.has(c.priceListNumber ?? ""));
+  console.log(`[sync] ${customers.length} clientes sincronizados (comercio 100/101 · distrib. 300/301/400/401)`);
 
   let sinTelefono = 0;
   for (const c of customers) {
@@ -28,6 +27,7 @@ export async function runSync(): Promise<void> {
       phoneNormalized: c.phone,
       provinceCode:    c.provinceCode,
       sellerCode:      c.sellerCode,
+      priceListNumber: c.priceListNumber,
       deliveryDays:    c.deliveryDays,
     });
   }
