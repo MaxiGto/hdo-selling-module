@@ -2,9 +2,10 @@
 
 export const config = {
   port: Number(process.env.PORT ?? 3000),
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-  // Modelo barato y rápido para consultas simples (ver PLAN-MVP, Fase 2.6).
-  model: "claude-haiku-4-5",
+  groq: {
+    apiKey: process.env.GROQ_API_KEY ?? "",
+    model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+  },
   chatwoot: {
     baseUrl: process.env.CHATWOOT_BASE_URL ?? "http://rails:3000",
     // Token del Agent Bot — solo para respuestas reactivas (webhook).
@@ -28,7 +29,7 @@ export const config = {
 // Avisa al arrancar si falta algo crítico, sin frenar el proceso.
 export function warnMissingConfig(): void {
   const missing: string[] = [];
-  if (!config.anthropicApiKey)       missing.push("ANTHROPIC_API_KEY");
+  if (!config.groq.apiKey)           missing.push("GROQ_API_KEY");
   if (!config.chatwoot.accessToken)  missing.push("CHATWOOT_API_ACCESS_TOKEN");
   if (!config.chatwoot.agentToken)   missing.push("CHATWOOT_AGENT_TOKEN");
   if (!config.chatwoot.accountId)    missing.push("CHATWOOT_ACCOUNT_ID");
