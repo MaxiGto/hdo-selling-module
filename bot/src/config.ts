@@ -2,9 +2,9 @@
 
 export const config = {
   port: Number(process.env.PORT ?? 3000),
-  groq: {
-    apiKey: process.env.GROQ_API_KEY ?? "",
-    model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY ?? "",
+    model: process.env.GEMINI_MODEL ?? "gemini-1.5-flash",
   },
   chatwoot: {
     baseUrl: process.env.CHATWOOT_BASE_URL ?? "http://rails:3000",
@@ -29,7 +29,7 @@ export const config = {
 // Avisa al arrancar si falta algo crítico, sin frenar el proceso.
 export function warnMissingConfig(): void {
   const missing: string[] = [];
-  if (!config.groq.apiKey)           missing.push("GROQ_API_KEY");
+  if (!config.gemini.apiKey)         missing.push("GEMINI_API_KEY");
   if (!config.chatwoot.accessToken)  missing.push("CHATWOOT_API_ACCESS_TOKEN");
   if (!config.chatwoot.agentToken)   missing.push("CHATWOOT_AGENT_TOKEN");
   if (!config.chatwoot.accountId)    missing.push("CHATWOOT_ACCOUNT_ID");
