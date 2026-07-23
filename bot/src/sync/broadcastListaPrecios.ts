@@ -80,23 +80,25 @@ async function sendTemplate(
   templateName: string,
   folderUrl: string,
 ): Promise<void> {
+  const body = JSON.stringify({
+    message_type: "outgoing",
+    template_params: {
+      name: templateName,
+      category: "MARKETING",
+      language: "es",
+      processed_params: { "1": folderUrl },
+    },
+  });
   const res = await fetch(accountUrl(`/conversations/${conversationId}/messages`), {
     method: "POST",
     headers: agentHeaders(),
-    body: JSON.stringify({
-      message_type: "outgoing",
-      template_params: {
-        name: templateName,
-        category: "MARKETING",
-        language: "es",
-        processed_params: { "1": folderUrl },
-      },
-    }),
+    body,
   });
+  const responseText = await res.text();
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`sendTemplate(${templateName}) falló (${res.status}): ${text}`);
+    throw new Error(`sendTemplate(${templateName}) falló (${res.status}): ${responseText}`);
   }
+  console.log(`[broadcast]   → Chatwoot response (${res.status}): ${responseText.slice(0, 200)}`);
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
