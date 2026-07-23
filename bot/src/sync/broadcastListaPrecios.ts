@@ -86,7 +86,7 @@ async function sendTemplate(
       name: templateName,
       category: "MARKETING",
       language: "es",
-      processed_params: { "1": folderUrl },
+      processed_params: { folder_url: folderUrl },
     },
   });
   const res = await fetch(accountUrl(`/conversations/${conversationId}/messages`), {
