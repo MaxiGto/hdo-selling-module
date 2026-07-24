@@ -74,6 +74,9 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 `;
 
 export async function runMigrations(): Promise<void> {
+  const { rows } = await pool.query("SELECT current_database() AS db, current_user AS usr");
+  console.log(`[db] conexión OK -> base "${rows[0].db}" como "${rows[0].usr}"`);
+
   await pool.query(SQL);
   await pool.query(MIGRATIONS);
   console.log("[db] migraciones OK");

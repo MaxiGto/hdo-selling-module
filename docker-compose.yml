@@ -8,7 +8,7 @@ x-chatwoot: &chatwoot
   restart: unless-stopped
 
 services:
-  # ---------- Datos: Postgres (compartido Chatwoot + bot) ----------
+  # ---------- Datos: Postgres (compartido Chatwoot + bot + módulo logístico) ----------
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
@@ -69,7 +69,7 @@ services:
 
   # ---------- Bot de Hierbas del Oasis (Agent Bot de Chatwoot) ----------
   # No expone puertos al exterior: Chatwoot lo alcanza por la red interna
-  # como http://bot:3000  (se desarrolla en la Fase 2; por ahora es un stub)
+  # como http://bot:3000
   bot:
     build: ./bot
     # Loopback del host (127.0.0.1): para probar el bot localmente; nunca público.
@@ -84,6 +84,26 @@ services:
       # DATABASE_URL del bot se define ACÁ (no en .env), para que NO lo herede
       # Chatwoot: Rails le da prioridad a DATABASE_URL y migraría en la base equivocada.
       - DATABASE_URL=postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@postgres:5432/oasisbot
+    restart: unless-stopped
+
+  # ---------- Módulo Logístico: Backend (Excel generation) ----------
+  # Usa la MISMA base 'oasisbot' que ya usa el bot (no crea una base nueva).
+  # Puerto 3002: acceso interno para frontend
+  logistic-backend:
+    build: ../logistic-module/backend
+    ports:
+      - "127.0.0.1:3002:3001"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@postgres:5432/oasisbot
+      - TANGO_API_BASE_URL=${TANGO_API_BASE_URL}
+      - TANGO_ACCESS_TOKEN=${TANGO_ACCESS_TOKEN}
+      - TANGO_PAGE_SIZE=${TANGO_PAGE_SIZE}
     restart: unless-stopped
 
   # ---------- Reverse proxy + HTTPS automático ----------
