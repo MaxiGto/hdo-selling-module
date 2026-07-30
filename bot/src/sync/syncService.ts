@@ -30,6 +30,10 @@ export async function runSync(): Promise<void> {
       sellerCode:      c.sellerCode,
       priceListNumber: c.priceListNumber,
       documentNumber:  c.documentNumber,
+      email:           c.email,
+      address:         c.address,
+      city:            c.city,
+      postalCode:      c.postalCode,
       deliveryDays:    c.deliveryDays,
     });
   }

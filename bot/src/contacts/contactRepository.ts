@@ -61,6 +61,10 @@ export async function upsertContact(data: {
   sellerCode: string | null;
   priceListNumber: string | null;
   documentNumber?: string | null;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
   deliveryDays: {
     monday: boolean; tuesday: boolean; wednesday: boolean;
     thursday: boolean; friday: boolean; saturday: boolean; sunday: boolean;
@@ -70,10 +74,10 @@ export async function upsertContact(data: {
   await pool.query(
     `INSERT INTO contacts
        (tango_id, tango_internal_id, name, phone_normalized, province_code, seller_code,
-        price_list_number, cuit,
+        price_list_number, cuit, email, address, city, postal_code,
         delivers_monday, delivers_tuesday, delivers_wednesday, delivers_thursday,
         delivers_friday, delivers_saturday, delivers_sunday, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15, NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19, NOW())
      ON CONFLICT (tango_id) DO UPDATE SET
        tango_internal_id  = COALESCE(EXCLUDED.tango_internal_id, contacts.tango_internal_id),
        name               = EXCLUDED.name,
@@ -82,6 +86,10 @@ export async function upsertContact(data: {
        seller_code        = EXCLUDED.seller_code,
        price_list_number  = EXCLUDED.price_list_number,
        cuit               = COALESCE(EXCLUDED.cuit, contacts.cuit),
+       email              = EXCLUDED.email,
+       address            = EXCLUDED.address,
+       city               = EXCLUDED.city,
+       postal_code        = EXCLUDED.postal_code,
        delivers_monday    = EXCLUDED.delivers_monday,
        delivers_tuesday   = EXCLUDED.delivers_tuesday,
        delivers_wednesday = EXCLUDED.delivers_wednesday,
@@ -94,6 +102,7 @@ export async function upsertContact(data: {
       data.tangoId, data.tangoInternalId ?? null,
       data.name, data.phoneNormalized, data.provinceCode, data.sellerCode,
       data.priceListNumber, data.documentNumber ?? null,
+      data.email ?? null, data.address ?? null, data.city ?? null, data.postalCode ?? null,
       d.monday, d.tuesday, d.wednesday, d.thursday, d.friday, d.saturday, d.sunday,
     ],
   );
@@ -105,8 +114,13 @@ export interface ContactOrderData {
   cuit: string | null;
   ivaCategory: string | null;
   name: string;
+  sellerCode: string | null;
   provinceCode: string | null;
   priceListNumber: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  postalCode: string | null;
 }
 
 export async function getContactForOrder(chatwootContactId: number): Promise<ContactOrderData | null> {
@@ -115,10 +129,16 @@ export async function getContactForOrder(chatwootContactId: number): Promise<Con
     cuit: string | null;
     iva_category: string | null;
     name: string;
+    seller_code: string | null;
     province_code: string | null;
     price_list_number: string | null;
+    email: string | null;
+    address: string | null;
+    city: string | null;
+    postal_code: string | null;
   }>(
-    `SELECT tango_internal_id, cuit, iva_category, name, province_code, price_list_number
+    `SELECT tango_internal_id, cuit, iva_category, name, seller_code,
+            province_code, price_list_number, email, address, city, postal_code
      FROM contacts WHERE chatwoot_contact_id = $1 LIMIT 1`,
     [chatwootContactId],
   );
@@ -129,8 +149,13 @@ export async function getContactForOrder(chatwootContactId: number): Promise<Con
     cuit:            r.cuit,
     ivaCategory:     r.iva_category ?? "RI",
     name:            r.name,
+    sellerCode:      r.seller_code,
     provinceCode:    r.province_code,
     priceListNumber: r.price_list_number,
+    email:           r.email,
+    address:         r.address,
+    city:            r.city,
+    postalCode:      r.postal_code,
   };
 }
 
