@@ -46,10 +46,8 @@ async function processEvent(payload: any): Promise<void> {
     let orderCreationEnabled = false;
     if (typeof chatwootContactId === "number") {
       void resetNoResponseStreak(chatwootContactId);
-      [clientCategory, orderCreationEnabled] = await Promise.all([
-        getCategoryByChatwootId(chatwootContactId),
-        isOrderCreationEnabled(chatwootContactId),
-      ]);
+      clientCategory = await getCategoryByChatwootId(chatwootContactId);
+      orderCreationEnabled = isOrderCreationEnabled(chatwootContactId);
     }
 
     // Conversación derivada a un asesor → el bot no interviene más

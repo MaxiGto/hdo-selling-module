@@ -134,17 +134,12 @@ export async function getContactForOrder(chatwootContactId: number): Promise<Con
   };
 }
 
-// Nombres (parciales, case-insensitive) habilitados para crear pedidos en beta.
-// Se comparan contra la columna `name` de contacts (formato "COD - Nombre Cliente").
-const ORDER_CREATION_BETA_NAMES = ["maxi gt", "sabrina barrionuevo"];
+// Chatwoot contact IDs habilitados para crear pedidos (beta).
+// 8608 = Maxi GT, 11390 = Sabrina Barrionuevo.
+const ORDER_CREATION_BETA_IDS = new Set([8608, 11390]);
 
-export async function isOrderCreationEnabled(chatwootContactId: number): Promise<boolean> {
-  const { rows } = await pool.query<{ name: string }>(
-    `SELECT name FROM contacts WHERE chatwoot_contact_id = $1 LIMIT 1`,
-    [chatwootContactId],
-  );
-  const name = rows[0]?.name?.toLowerCase() ?? "";
-  return ORDER_CREATION_BETA_NAMES.some((n) => name.includes(n));
+export function isOrderCreationEnabled(chatwootContactId: number): boolean {
+  return ORDER_CREATION_BETA_IDS.has(chatwootContactId);
 }
 
 // Devuelve "C", "D", "D+" según el price_list_number del cliente en la DB del bot.
