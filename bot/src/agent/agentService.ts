@@ -12,79 +12,84 @@ export type AgentResult =
   | { type: "handoff"; mensaje: string; motivo: string };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TOOLS: any[] = [
-  {
-    functionDeclarations: [
-      {
-        name: "derivar_a_asesor",
-        description:
-          "Deriva la conversación a un asesor humano. Usá esta herramienta (no solo lo menciones en el texto) cuando el cliente pide algo fuera del scope del bot: formas de pago, envíos, estado de pedido anterior, reclamos, devoluciones, dudas sobre propiedades de productos, o cuando el cliente está molesto. También usala cuando el cliente confirmó su pedido y ya no quiere agregar más ítems, o cuando un producto no aparece en el catálogo.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            motivo: {
-              type: SchemaType.STRING,
-              description: "Nota interna de una línea (ej.: 'pedido completo', 'cliente molesto', 'producto no encontrado')",
-            },
-            mensaje: {
-              type: SchemaType.STRING,
-              description: "Mensaje de despedida para el cliente, cálido y breve (máx. 2 oraciones)",
-            },
-          },
-          required: ["motivo", "mensaje"],
-        },
+const TOOL_DERIVAR: any = {
+  name: "derivar_a_asesor",
+  description:
+    "Deriva la conversación a un asesor humano. Usá esta herramienta (no solo lo menciones en el texto) cuando el cliente pide algo fuera del scope del bot: formas de pago, envíos, estado de pedido anterior, reclamos, devoluciones, dudas sobre propiedades de productos, o cuando el cliente está molesto. También usala cuando el cliente confirmó su pedido y ya no quiere agregar más ítems, o cuando un producto no aparece en el catálogo.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      motivo: {
+        type: SchemaType.STRING,
+        description: "Nota interna de una línea (ej.: 'pedido completo', 'cliente molesto', 'producto no encontrado')",
       },
-      {
-        name: "crear_pedido",
-        description:
-          "Crea el pedido en Tango cuando el cliente confirmó todos los ítems. Usá esta herramienta SOLO después de haber validado el stock de cada producto con consultar_stock y de que el cliente confirmó el pedido explícitamente. Después de crear el pedido exitoso, derivá al asesor para coordinar entrega y pago.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            items: {
-              type: SchemaType.ARRAY,
-              description: "Lista de productos confirmados por el cliente",
-              items: {
-                type: SchemaType.OBJECT,
-                properties: {
-                  sku_code:    { type: SchemaType.STRING, description: "Código SKU obtenido de consultar_stock" },
-                  tango_id:    { type: SchemaType.NUMBER, description: "ID interno de Tango obtenido de consultar_stock" },
-                  description: { type: SchemaType.STRING, description: "Descripción del producto" },
-                  cantidad:    { type: SchemaType.NUMBER, description: "Cantidad pedida" },
-                },
-                required: ["sku_code", "tango_id", "description", "cantidad"],
-              },
-            },
-            observaciones: {
-              type: SchemaType.STRING,
-              description: "Observaciones adicionales del cliente (opcional)",
-            },
-          },
-          required: ["items"],
-        },
+      mensaje: {
+        type: SchemaType.STRING,
+        description: "Mensaje de despedida para el cliente, cálido y breve (máx. 2 oraciones)",
       },
-      {
-        name: "consultar_stock",
-        description:
-          "Consulta el stock disponible de un producto en el catálogo. Usá esta herramienta cuando el cliente pregunta por disponibilidad de un producto específico, o al final de un pedido para validar cada ítem antes de derivar al asesor. El stock se actualiza cada 30 minutos desde Tango.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            query: {
-              type: SchemaType.STRING,
-              description: "Nombre o código del producto a buscar (ej: 'romero', 'té verde jengibre', '08INF093')",
-            },
-            cantidad: {
-              type: SchemaType.NUMBER,
-              description: "Cantidad que el cliente pidió (opcional). Si se indica, la respuesta dirá si hay stock suficiente para esa cantidad.",
-            },
-          },
-          required: ["query"],
-        },
-      },
-    ],
+    },
+    required: ["motivo", "mensaje"],
   },
-];
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const TOOL_CREAR_PEDIDO: any = {
+  name: "crear_pedido",
+  description:
+    "Crea el pedido en Tango cuando el cliente confirmó todos los ítems. Usá esta herramienta SOLO después de haber validado el stock de cada producto con consultar_stock y de que el cliente confirmó el pedido explícitamente. Después de crear el pedido exitoso, derivá al asesor para coordinar entrega y pago.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      items: {
+        type: SchemaType.ARRAY,
+        description: "Lista de productos confirmados por el cliente",
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            sku_code:    { type: SchemaType.STRING, description: "Código SKU obtenido de consultar_stock" },
+            tango_id:    { type: SchemaType.NUMBER, description: "ID interno de Tango obtenido de consultar_stock" },
+            description: { type: SchemaType.STRING, description: "Descripción del producto" },
+            cantidad:    { type: SchemaType.NUMBER, description: "Cantidad pedida" },
+          },
+          required: ["sku_code", "tango_id", "description", "cantidad"],
+        },
+      },
+      observaciones: {
+        type: SchemaType.STRING,
+        description: "Observaciones adicionales del cliente (opcional)",
+      },
+    },
+    required: ["items"],
+  },
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const TOOL_STOCK: any = {
+  name: "consultar_stock",
+  description:
+    "Consulta el stock disponible de un producto en el catálogo. Usá esta herramienta cuando el cliente pregunta por disponibilidad de un producto específico, o al final de un pedido para validar cada ítem antes de derivar al asesor. El stock se actualiza cada 30 minutos desde Tango.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      query: {
+        type: SchemaType.STRING,
+        description: "Nombre o código del producto a buscar (ej: 'romero', 'té verde jengibre', '08INF093')",
+      },
+      cantidad: {
+        type: SchemaType.NUMBER,
+        description: "Cantidad que el cliente pidió (opcional). Si se indica, la respuesta dirá si hay stock suficiente para esa cantidad.",
+      },
+    },
+    required: ["query"],
+  },
+};
+
+function buildTools(orderCreationEnabled: boolean) {
+  const declarations = [TOOL_DERIVAR];
+  if (orderCreationEnabled) declarations.push(TOOL_CREAR_PEDIDO);
+  declarations.push(TOOL_STOCK);
+  return [{ functionDeclarations: declarations }];
+}
 
 // Convierte el historial de Chatwoot al formato Content de Gemini.
 // Colapsa mensajes consecutivos del mismo rol (WhatsApp permite ráfagas multi-mensaje).
@@ -130,13 +135,15 @@ export async function generateReply(
   currentMessage: string,
   clientCategory?: string | null,
   chatwootContactId?: number | null,
+  orderCreationEnabled?: boolean,
 ): Promise<AgentResult> {
   const systemPrompt = buildSystemPrompt(clientCategory ?? null);
+  const tools = buildTools(orderCreationEnabled ?? false);
 
   const model = genAI.getGenerativeModel({
     model: config.gemini.model,
     systemInstruction: systemPrompt,
-    tools: TOOLS,
+    tools,
   });
 
   const history = await fetchConversationMessages(conversationId, 30);

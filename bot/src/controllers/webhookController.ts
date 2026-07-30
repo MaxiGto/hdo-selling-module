@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { generateReply } from "../agent/agentService.js";
 import { isHandedOff, markHandedOff } from "../agent/handoffRepository.js";
 import { sendMessage, openConversation } from "../chatwoot/chatwootClient.js";
-import { resetNoResponseStreak, getCategoryByChatwootId } from "../contacts/contactRepository.js";
+import { resetNoResponseStreak, getCategoryByChatwootId, isOrderCreationEnabled } from "../contacts/contactRepository.js";
 
 // Idempotencia básica: evita procesar el mismo message.id dos veces en el mismo proceso.
 const processedMessageIds = new Set<number>();
@@ -43,9 +43,13 @@ async function processEvent(payload: any): Promise<void> {
     // El cliente respondió → resetear streak de no-respuesta + identificar categoría
     const chatwootContactId = payload?.conversation?.meta?.sender?.id;
     let clientCategory: string | null = null;
+    let orderCreationEnabled = false;
     if (typeof chatwootContactId === "number") {
       void resetNoResponseStreak(chatwootContactId);
-      clientCategory = await getCategoryByChatwootId(chatwootContactId);
+      [clientCategory, orderCreationEnabled] = await Promise.all([
+        getCategoryByChatwootId(chatwootContactId),
+        isOrderCreationEnabled(chatwootContactId),
+      ]);
     }
 
     // Conversación derivada a un asesor → el bot no interviene más
@@ -65,7 +69,7 @@ async function processEvent(payload: any): Promise<void> {
 
     if (!content) return;
 
-    const result = await generateReply(conversationId, content, clientCategory, chatwootContactId ?? null);
+    const result = await generateReply(conversationId, content, clientCategory, chatwootContactId ?? null, orderCreationEnabled);
 
     if (result.type === "handoff") {
       await sendMessage(conversationId, result.mensaje);
