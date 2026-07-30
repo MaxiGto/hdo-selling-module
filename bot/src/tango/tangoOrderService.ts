@@ -128,6 +128,6 @@ export async function createTangoOrder(
     return { success: false, error: `Error al crear pedido en Tango (${res.status})` };
   }
 
-  console.log(`[order] pedido creado: ${orderId} — total: $${total.toFixed(2)}`);
+  console.log(`[order] pedido creado: ${orderId} — total: $${total.toFixed(2)} — respuesta Tango: ${responseText}`);
   return { success: true, orderId };
 }
