@@ -44,3 +44,11 @@ export async function runSync(): Promise<void> {
     (sinDias > 0 ? ` | sin días de entrega en Tango: ${sinDias}` : ""),
   );
 }
+
+if (process.argv[1]?.endsWith("syncService.js")) {
+  import("../db/pool.js").then(({ default: pool }) =>
+    runSync()
+      .then(() => pool.end())
+      .catch((err) => { console.error("[sync] error fatal:", err); process.exit(1); }),
+  );
+}
