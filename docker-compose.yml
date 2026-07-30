@@ -84,6 +84,9 @@ services:
       # DATABASE_URL del bot se define ACÁ (no en .env), para que NO lo herede
       # Chatwoot: Rails le da prioridad a DATABASE_URL y migraría en la base equivocada.
       - DATABASE_URL=postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@postgres:5432/oasisbot
+      - TANGO_DELTA_URL=${TANGO_DELTA_URL}
+      - TANGO_DELTA_TOKEN=${TANGO_DELTA_TOKEN}
+      - TANGO_DELTA_COMPANY=${TANGO_DELTA_COMPANY}
     restart: unless-stopped
 
   # ---------- Módulo Logístico: Backend (Excel generation) ----------

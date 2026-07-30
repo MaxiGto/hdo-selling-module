@@ -23,6 +23,10 @@ export const config = {
     accessToken: process.env.TANGO_ACCESS_TOKEN ?? "",
     // Tamaño de página para todos los endpoints de Tango (productos, stock, clientes).
     pageSize: Number(process.env.TANGO_PAGE_SIZE ?? 5000),
+    // Delta API — para obtener ID_GVA14 (ID numérico interno de cada cliente).
+    deltaUrl:     process.env.TANGO_DELTA_URL ?? "",
+    deltaToken:   process.env.TANGO_DELTA_TOKEN ?? "",
+    deltaCompany: process.env.TANGO_DELTA_COMPANY ?? "",
   },
 };
 
