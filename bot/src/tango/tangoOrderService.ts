@@ -29,11 +29,15 @@ export async function createTangoOrder(
   observaciones?: string,
 ): Promise<OrderResult> {
   // ── 1. Datos del contacto ────────────────────────────────────────────────
+  console.log(`[order] iniciando pedido para chatwootContactId=${chatwootContactId}`);
   const contact = await getContactForOrder(chatwootContactId);
   if (!contact) {
+    console.error(`[order] contacto no encontrado en DB (chatwootContactId=${chatwootContactId})`);
     return { success: false, error: "Contacto no encontrado en la base de datos del bot" };
   }
+  console.log(`[order] contacto: ${contact.name} | tangoInternalId=${contact.tangoInternalId} | lista=${contact.priceListNumber}`);
   if (!contact.tangoInternalId) {
+    console.error(`[order] contacto sin tango_internal_id — sync pendiente`);
     return { success: false, error: "El contacto no tiene ID interno de Tango (pendiente de sync)" };
   }
 
@@ -41,6 +45,7 @@ export async function createTangoOrder(
 
   // ── 2. Precios de los ítems ──────────────────────────────────────────────
   const skuCodes = items.map((i) => i.skuCode);
+  console.log(`[order] buscando precios en lista ${priceList} para SKUs: ${skuCodes.join(", ")}`);
   const { rows: priceRows } = await pool.query<{ sku_code: string; price: string }>(
     `SELECT sku_code, price FROM price_cache
      WHERE sku_code = ANY($1) AND price_list_number = $2`,
@@ -50,6 +55,7 @@ export async function createTangoOrder(
 
   const missingPrices = skuCodes.filter((sku) => !priceMap.has(sku));
   if (missingPrices.length > 0) {
+    console.error(`[order] sin precio en lista ${priceList} para: ${missingPrices.join(", ")}`);
     return {
       success: false,
       error: `Sin precio para lista ${priceList}: ${missingPrices.join(", ")}`,
