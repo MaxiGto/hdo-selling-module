@@ -2,6 +2,7 @@ import pool from "../db/pool.js";
 
 export interface StockResult {
   skuCode: string;
+  tangoId: number | null;
   description: string;
   additionalDescription: string | null;
   available: number;
@@ -31,12 +32,13 @@ export async function searchStock(query: string): Promise<StockResult[]> {
 
   const { rows } = await pool.query<{
     sku_code: string;
+    tango_id: number | null;
     description: string;
     additional_description: string | null;
     quantity: string;
     engaged_quantity: string;
   }>(
-    `SELECT sku_code, description, additional_description, quantity, engaged_quantity
+    `SELECT sku_code, tango_id, description, additional_description, quantity, engaged_quantity
      FROM product_stock_cache
      WHERE ${whereClause}
      ORDER BY (${scoreExpr}) DESC,
@@ -48,6 +50,7 @@ export async function searchStock(query: string): Promise<StockResult[]> {
 
   return rows.map((r) => ({
     skuCode: r.sku_code,
+    tangoId: r.tango_id,
     description: r.description,
     additionalDescription: r.additional_description,
     available: Number(r.quantity) - Number(r.engaged_quantity),

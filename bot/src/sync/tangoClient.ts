@@ -20,6 +20,7 @@ interface TangoShippingAddress {
 }
 
 interface TangoCustomer {
+  Id?: number;                   // ID interno de Tango (ID_GVA14)
   Code: string;
   BusinessName?: string;
   TradeName?: string;
@@ -88,15 +89,16 @@ function bestPhone(c: TangoCustomer): string | null {
 
 export interface TangoCustomerFlat {
   tangoId: string;
+  tangoInternalId: number | null; // ID interno de Tango (ID_GVA14), usado como CustomerID en la API de pedidos
   name: string;
-  businessName: string | null;   // razón social (BusinessName)
+  businessName: string | null;    // razón social (BusinessName)
   phone: string | null;
   email: string | null;
-  address: string | null;        // dirección de entrega principal
+  address: string | null;         // dirección de entrega principal
   city: string | null;
   postalCode: string | null;
   provinceCode: string | null;
-  documentNumber: string | null; // CUIT/DNI
+  documentNumber: string | null;  // CUIT/DNI
   sellerCode: string | null;
   priceListNumber: string | null;
   deliveryDays: {
@@ -123,16 +125,17 @@ function flattenCustomer(c: TangoCustomer): TangoCustomerFlat {
   const str = (v?: string) => v?.trim() || null;
 
   return {
-    tangoId:        c.Code,
+    tangoId:         c.Code,
+    tangoInternalId: c.Id ?? null,
     name,
-    businessName:   str(c.BusinessName),
-    phone:          bestPhone(c),
-    email:          str(c.Email),
-    address:        str(defaultAddr?.Address ?? c.Address),
-    city:           str(defaultAddr?.City ?? c.City),
-    postalCode:     str(defaultAddr?.PostalCode ?? c.PostalCode),
-    provinceCode:   str(c.ProvinceCode),
-    documentNumber: str(c.DocumentNumber),
+    businessName:    str(c.BusinessName),
+    phone:           bestPhone(c),
+    email:           str(c.Email),
+    address:         str(defaultAddr?.Address ?? c.Address),
+    city:            str(defaultAddr?.City ?? c.City),
+    postalCode:      str(defaultAddr?.PostalCode ?? c.PostalCode),
+    provinceCode:    str(c.ProvinceCode),
+    documentNumber:  str(c.DocumentNumber),
     sellerCode:      str(c.SellerCode),
     priceListNumber: priceListNum,
     deliveryDays: {

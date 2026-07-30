@@ -65,7 +65,7 @@ async function processEvent(payload: any): Promise<void> {
 
     if (!content) return;
 
-    const result = await generateReply(conversationId, content, clientCategory);
+    const result = await generateReply(conversationId, content, clientCategory, chatwootContactId ?? null);
 
     if (result.type === "handoff") {
       await sendMessage(conversationId, result.mensaje);

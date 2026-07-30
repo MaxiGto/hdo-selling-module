@@ -3,6 +3,7 @@ import { CAMPAIGNS } from "./campaignDefinitions.js";
 import { runCampaign } from "./campaignService.js";
 import { runSync } from "../sync/syncService.js";
 import { syncProductStock } from "../sync/tangoProductSync.js";
+import { syncPrices } from "../sync/tangoPriceSync.js";
 import { clearAllHandoffs } from "../agent/handoffRepository.js";
 
 // Zona horaria de Argentina (UTC-3, sin DST).
@@ -30,6 +31,10 @@ export function startCrons(): void {
   // Sync nocturno con Tango: todos los días a las 3:00 hs.
   schedule("0 3 * * *", () => void runSync(), { timezone: TZ });
   console.log("[cron] sync Tango → todos los días 03:00 hs (ART)");
+
+  // Sync de precios: todos los días a las 3:30 hs (después del sync de clientes).
+  schedule("30 3 * * *", () => void syncPrices(), { timezone: TZ });
+  console.log("[cron] sync precios → todos los días 03:30 hs (ART)");
 
   // Sync de stock cada 30 minutos (productos + cantidades por depósito).
   schedule("*/30 * * * *", () => void syncProductStock(), { timezone: TZ });

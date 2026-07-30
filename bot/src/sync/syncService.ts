@@ -23,11 +23,13 @@ export async function runSync(): Promise<void> {
 
     await upsertContact({
       tangoId:         c.tangoId,
+      tangoInternalId: c.tangoInternalId,
       name:            c.name,
       phoneNormalized: c.phone,
       provinceCode:    c.provinceCode,
       sellerCode:      c.sellerCode,
       priceListNumber: c.priceListNumber,
+      documentNumber:  c.documentNumber,
       deliveryDays:    c.deliveryDays,
     });
   }

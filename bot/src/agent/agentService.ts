@@ -3,6 +3,7 @@ import { config } from "../config.js";
 import { buildSystemPrompt } from "./guidelines.js";
 import { fetchConversationMessages, type ChatwootMessage } from "../chatwoot/chatwootClient.js";
 import { searchStock, formatStockResults } from "./productStockRepository.js";
+import { createTangoOrder, type OrderItem } from "../tango/tangoOrderService.js";
 
 const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
 
@@ -31,6 +32,35 @@ const TOOLS: any[] = [
             },
           },
           required: ["motivo", "mensaje"],
+        },
+      },
+      {
+        name: "crear_pedido",
+        description:
+          "Crea el pedido en Tango cuando el cliente confirmó todos los ítems. Usá esta herramienta SOLO después de haber validado el stock de cada producto con consultar_stock y de que el cliente confirmó el pedido explícitamente. Después de crear el pedido exitoso, derivá al asesor para coordinar entrega y pago.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            items: {
+              type: SchemaType.ARRAY,
+              description: "Lista de productos confirmados por el cliente",
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  sku_code:    { type: SchemaType.STRING, description: "Código SKU obtenido de consultar_stock" },
+                  tango_id:    { type: SchemaType.NUMBER, description: "ID interno de Tango obtenido de consultar_stock" },
+                  description: { type: SchemaType.STRING, description: "Descripción del producto" },
+                  cantidad:    { type: SchemaType.NUMBER, description: "Cantidad pedida" },
+                },
+                required: ["sku_code", "tango_id", "description", "cantidad"],
+              },
+            },
+            observaciones: {
+              type: SchemaType.STRING,
+              description: "Observaciones adicionales del cliente (opcional)",
+            },
+          },
+          required: ["items"],
         },
       },
       {
@@ -99,6 +129,7 @@ export async function generateReply(
   conversationId: number,
   currentMessage: string,
   clientCategory?: string | null,
+  chatwootContactId?: number | null,
 ): Promise<AgentResult> {
   const systemPrompt = buildSystemPrompt(clientCategory ?? null);
 
@@ -134,6 +165,64 @@ export async function generateReply(
         motivo: args.motivo ?? "sin motivo",
         mensaje: args.mensaje ?? "Te paso con un asesor ahora mismo 🙌",
       };
+    }
+
+    // Creación de pedido en Tango
+    const orderPart = functionCallParts.find(
+      (p) => "functionCall" in p && p.functionCall?.name === "crear_pedido",
+    );
+    if (orderPart && "functionCall" in orderPart && orderPart.functionCall) {
+      const args = orderPart.functionCall.args as {
+        items: { sku_code: string; tango_id: number; description: string; cantidad: number }[];
+        observaciones?: string;
+      };
+
+      if (!chatwootContactId) {
+        return {
+          type: "handoff",
+          motivo: "error al crear pedido: sin ID de contacto",
+          mensaje: "Hubo un problema técnico al registrar tu pedido. Te paso con un asesor.",
+        };
+      }
+
+      const orderItems: OrderItem[] = args.items.map((i) => ({
+        skuCode:     i.sku_code,
+        tangoId:     i.tango_id,
+        description: i.description,
+        quantity:    i.cantidad,
+      }));
+
+      try {
+        const orderResult = await withTimeout(
+          createTangoOrder(chatwootContactId, orderItems, args.observaciones),
+          30_000,
+        );
+        const responseText = orderResult.success
+          ? `Pedido registrado exitosamente (ID: ${orderResult.orderId})`
+          : `Error al registrar pedido: ${orderResult.error}`;
+
+        contents = [
+          ...contents,
+          { role: "model" as const, parts },
+          {
+            role: "user" as const,
+            parts: [{
+              functionResponse: {
+                name: "crear_pedido",
+                response: { result: responseText },
+              },
+            } as Part],
+          },
+        ];
+        continue;
+      } catch (err) {
+        console.error("[agent] error en crear_pedido:", err);
+        return {
+          type: "handoff",
+          motivo: "error técnico al crear pedido en Tango",
+          mensaje: "Hubo un problema al registrar tu pedido. Te paso con un asesor para confirmarlo.",
+        };
+      }
     }
 
     // Consultas de stock (pueden ser varias en paralelo)

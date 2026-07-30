@@ -69,8 +69,20 @@ const MIGRATIONS = `
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS no_response_streak INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS price_list_number TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS delivery_zone TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS tango_internal_id INTEGER;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS cuit TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS iva_category TEXT;
 CREATE EXTENSION IF NOT EXISTS unaccent;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE TABLE IF NOT EXISTS price_cache (
+  sku_code          TEXT    NOT NULL,
+  price_list_number INTEGER NOT NULL,
+  price             NUMERIC NOT NULL,
+  date_price        TIMESTAMPTZ,
+  last_synced_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (sku_code, price_list_number)
+);
 `;
 
 export async function runMigrations(): Promise<void> {

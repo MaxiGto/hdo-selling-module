@@ -54,11 +54,13 @@ export async function getAudienceByDeliveryDay(day: DeliveryDay): Promise<Contac
 // Upsert desde el sync con Tango. Nunca pisa opt_out si ya existe.
 export async function upsertContact(data: {
   tangoId: string;
+  tangoInternalId?: number | null;
   name: string;
   phoneNormalized: string;
   provinceCode: string | null;
   sellerCode: string | null;
   priceListNumber: string | null;
+  documentNumber?: string | null;
   deliveryDays: {
     monday: boolean; tuesday: boolean; wednesday: boolean;
     thursday: boolean; friday: boolean; saturday: boolean; sunday: boolean;
@@ -67,16 +69,19 @@ export async function upsertContact(data: {
   const d = data.deliveryDays;
   await pool.query(
     `INSERT INTO contacts
-       (tango_id, name, phone_normalized, province_code, seller_code, price_list_number,
+       (tango_id, tango_internal_id, name, phone_normalized, province_code, seller_code,
+        price_list_number, cuit,
         delivers_monday, delivers_tuesday, delivers_wednesday, delivers_thursday,
         delivers_friday, delivers_saturday, delivers_sunday, synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15, NOW())
      ON CONFLICT (tango_id) DO UPDATE SET
+       tango_internal_id  = COALESCE(EXCLUDED.tango_internal_id, contacts.tango_internal_id),
        name               = EXCLUDED.name,
        phone_normalized   = EXCLUDED.phone_normalized,
        province_code      = EXCLUDED.province_code,
        seller_code        = EXCLUDED.seller_code,
        price_list_number  = EXCLUDED.price_list_number,
+       cuit               = COALESCE(EXCLUDED.cuit, contacts.cuit),
        delivers_monday    = EXCLUDED.delivers_monday,
        delivers_tuesday   = EXCLUDED.delivers_tuesday,
        delivers_wednesday = EXCLUDED.delivers_wednesday,
@@ -86,11 +91,47 @@ export async function upsertContact(data: {
        delivers_sunday    = EXCLUDED.delivers_sunday,
        synced_at          = NOW()`,
     [
-      data.tangoId, data.name, data.phoneNormalized, data.provinceCode, data.sellerCode,
-      data.priceListNumber,
+      data.tangoId, data.tangoInternalId ?? null,
+      data.name, data.phoneNormalized, data.provinceCode, data.sellerCode,
+      data.priceListNumber, data.documentNumber ?? null,
       d.monday, d.tuesday, d.wednesday, d.thursday, d.friday, d.saturday, d.sunday,
     ],
   );
+}
+
+// Datos del contacto necesarios para crear un pedido en Tango.
+export interface ContactOrderData {
+  tangoInternalId: number | null;
+  cuit: string | null;
+  ivaCategory: string | null;
+  name: string;
+  provinceCode: string | null;
+  priceListNumber: string | null;
+}
+
+export async function getContactForOrder(chatwootContactId: number): Promise<ContactOrderData | null> {
+  const { rows } = await pool.query<{
+    tango_internal_id: number | null;
+    cuit: string | null;
+    iva_category: string | null;
+    name: string;
+    province_code: string | null;
+    price_list_number: string | null;
+  }>(
+    `SELECT tango_internal_id, cuit, iva_category, name, province_code, price_list_number
+     FROM contacts WHERE chatwoot_contact_id = $1 LIMIT 1`,
+    [chatwootContactId],
+  );
+  if (!rows[0]) return null;
+  const r = rows[0];
+  return {
+    tangoInternalId: r.tango_internal_id,
+    cuit:            r.cuit,
+    ivaCategory:     r.iva_category ?? "RI",
+    name:            r.name,
+    provinceCode:    r.province_code,
+    priceListNumber: r.price_list_number,
+  };
 }
 
 // Devuelve "C", "D", "D+" según el price_list_number del cliente en la DB del bot.
