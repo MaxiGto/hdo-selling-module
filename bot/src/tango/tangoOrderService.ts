@@ -107,10 +107,13 @@ export async function createTangoOrder(
   };
 
   // ── 4. POST a la API de Tiendas ──────────────────────────────────────────
+  const bodyJson = JSON.stringify(body);
+  console.log(`[order] enviando pedido:\n${bodyJson}`);
+
   const res = await fetch(`${config.tango.baseUrl}/api/Aperture/order`, {
     method:  "POST",
     headers: { accesstoken: config.tango.accessToken, "Content-Type": "application/json" },
-    body:    JSON.stringify(body),
+    body:    bodyJson,
   });
 
   const responseText = await res.text();
