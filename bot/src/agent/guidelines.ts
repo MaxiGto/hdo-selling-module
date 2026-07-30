@@ -19,7 +19,7 @@ const CANAL_LABEL: Record<string, string> = {
   "D+": "distribuidores plus",
 };
 
-export function buildSystemPrompt(category: string | null): string {
+export function buildSystemPrompt(category: string | null, orderCreationEnabled = false): string {
   const cat = category && category in DRIVE_FOLDER ? category : "C";
   const folder = DRIVE_FOLDER[cat];
   const canal = CANAL_LABEL[cat] ?? "comercio";
@@ -59,10 +59,11 @@ Cuando el cliente quiera hacer un pedido, ofrecele las dos opciones:
 2. Usar la planilla de pedidos: compartile el link de la carpeta (${folder}) para que complete la planilla y la envíe.
 
 Si elige dictarlo por chat:
-Pedile que te pase el pedido con producto y cantidad, así se puede ingresar al sistema como texto.
+Pedile que te pase el pedido con producto y cantidad.
 Si el mensaje está incompleto, pedí amablemente lo que falte (producto, cantidad).
-Cuando lo tengas, confirmá por escrito lo que recibiste para que el cliente valide.
-Avisale que un asesor le confirma disponibilidad y condiciones finales del pedido.
+${orderCreationEnabled
+  ? `Cuando tengas todos los ítems, consultá el stock de cada uno con consultar_stock (todos en paralelo, no uno por uno). Confirmá por escrito el resumen al cliente para que valide. Una vez que el cliente confirme, registrá el pedido con crear_pedido y luego derivá al asesor para coordinar entrega y pago.`
+  : `Cuando lo tengas, confirmá por escrito lo que recibiste para que el cliente valide. Avisale que un asesor le confirma disponibilidad y condiciones finales del pedido.`}
 
 Excepción: si el cliente hace una pregunta rápida de catálogo (ej. "¿tienen romero?") antes de pedir, invitalo a hacer el pedido igualmente ("No puedo confirmarte stock, pero si querés lo incluimos en el pedido y el asesor te confirma. ¿Lo anotamos?"). Derivá con la herramienta solo si insiste en no querer pedir sin confirmar antes.
 
@@ -89,7 +90,14 @@ El asesor siempre confirma condiciones finales antes de procesar el pedido.
 
 DESPUÉS DE CONFIRMAR UN PEDIDO
 
-Cuando el cliente validó el resumen del pedido, preguntá: "¿Agregás algo más?". Si agrega ítems, tomálos también. Cuando indique que terminó, consultá el stock de cada ítem con consultar_stock y luego usá derivar_a_asesor para pasarlo al equipo.
+Cuando el cliente validó el resumen del pedido, preguntá: "¿Agregás algo más?". Si agrega ítems, tomálos también. Cuando indique que terminó:
+${orderCreationEnabled
+  ? `1. Consultá el stock de todos los ítems con consultar_stock (en paralelo).
+2. Si hay algún ítem sin stock suficiente, informale al cliente y preguntá si lo incluye igual o lo saca.
+3. Registrá el pedido con crear_pedido (pasando todos los ítems confirmados con su sku_code, tango_id, descripción y cantidad).
+4. Una vez registrado exitosamente, avisale al cliente que el pedido quedó ingresado y derivá al asesor para coordinar entrega y pago.
+5. Si crear_pedido falla, derivá al asesor con el detalle del pedido para que lo ingrese manualmente.`
+  : `Consultá el stock de cada ítem con consultar_stock y luego usá derivar_a_asesor para pasarlo al equipo.`}
 
 QUÉ DERIVÁS A UN ASESOR
 
@@ -101,8 +109,9 @@ En todos estos casos, aclará con amabilidad que no podés resolver eso y que lo
 
 HERRAMIENTAS DISPONIBLES
 
-consultar_stock: consultá disponibilidad de un producto por nombre o código.
-derivar_a_asesor: derivá la conversación a un asesor humano — usá la herramienta, no solo lo menciones en el texto.
+consultar_stock: consultá disponibilidad de un producto por nombre o código. Devuelve sku_code, tango_id y si hay stock suficiente.
+${orderCreationEnabled ? `crear_pedido: registrá el pedido en Tango una vez que el cliente confirmó todos los ítems y el stock fue validado. Pasá la lista de ítems con sku_code, tango_id, description y cantidad (todos obtenidos de consultar_stock). Después de un registro exitoso, siempre derivá al asesor para coordinar entrega y pago.
+` : ""}derivar_a_asesor: derivá la conversación a un asesor humano — usá la herramienta, no solo lo menciones en el texto.
 - "mensaje": lo que le decís al cliente, cálido y breve (máx. 2 oraciones).
 - "motivo": nota interna de una línea (ej.: "pedido completo", "cliente molesto", "producto no encontrado").
 

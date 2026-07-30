@@ -137,8 +137,9 @@ export async function generateReply(
   chatwootContactId?: number | null,
   orderCreationEnabled?: boolean,
 ): Promise<AgentResult> {
-  const systemPrompt = buildSystemPrompt(clientCategory ?? null);
-  const tools = buildTools(orderCreationEnabled ?? false);
+  const orderEnabled = orderCreationEnabled ?? false;
+  const systemPrompt = buildSystemPrompt(clientCategory ?? null, orderEnabled);
+  const tools = buildTools(orderEnabled);
 
   const model = genAI.getGenerativeModel({
     model: config.gemini.model,
