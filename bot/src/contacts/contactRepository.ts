@@ -182,6 +182,15 @@ export async function getCategoryByChatwootId(chatwootContactId: number): Promis
   return null;
 }
 
+// Devuelve true si el contacto está registrado en la DB del bot (sync desde Tango).
+export async function isRegisteredContact(chatwootContactId: number): Promise<boolean> {
+  const { rows } = await pool.query<{ exists: boolean }>(
+    `SELECT EXISTS(SELECT 1 FROM contacts WHERE chatwoot_contact_id = $1) AS exists`,
+    [chatwootContactId],
+  );
+  return rows[0]?.exists ?? false;
+}
+
 // Guarda el ID de Chatwoot una vez que se crea el contacto allá.
 export async function setChatwootContactId(
   contactId: number,

@@ -2,7 +2,8 @@ import type { Request, Response } from "express";
 import { generateReply } from "../agent/agentService.js";
 import { isHandedOff, markHandedOff } from "../agent/handoffRepository.js";
 import { sendMessage, openConversation } from "../chatwoot/chatwootClient.js";
-import { resetNoResponseStreak, getCategoryByChatwootId, isOrderCreationEnabled } from "../contacts/contactRepository.js";
+import { resetNoResponseStreak, getCategoryByChatwootId, isOrderCreationEnabled, isRegisteredContact } from "../contacts/contactRepository.js";
+import { TEMPLATE_CLIENTE_NUEVO } from "../agent/templates.js";
 
 // Idempotencia básica: evita procesar el mismo message.id dos veces en el mismo proceso.
 const processedMessageIds = new Set<number>();
@@ -66,6 +67,16 @@ async function processEvent(payload: any): Promise<void> {
     }
 
     if (!content) return;
+
+    // Cliente no registrado en la DB del bot (no está en Tango) → mensaje de alta, sin AI
+    if (typeof chatwootContactId === "number") {
+      const registered = await isRegisteredContact(chatwootContactId);
+      if (!registered) {
+        console.log(`[bot] conv. ${conversationId} — cliente no registrado (chatwootId=${chatwootContactId}), enviando template de alta`);
+        await sendMessage(conversationId, TEMPLATE_CLIENTE_NUEVO);
+        return;
+      }
+    }
 
     const result = await generateReply(conversationId, content, clientCategory, chatwootContactId ?? null, orderCreationEnabled);
 
