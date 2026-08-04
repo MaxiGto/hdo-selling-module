@@ -13,7 +13,7 @@ Para que ya lo vayas teniendo en cuenta:
 
 🚚 Envío SIN CARGO en CABA y GBA.
 
-📦 Envíos al interior: Te hacemos el despacho sin cargo hasta tu expreso de confianza (el tramo final corre por cuenta tuya).
+📦 Interior del país: El traslado hasta el expreso elegido en Buenos Aires es SIN COSTO. El flete hasta la localidad de entrega es a cargo del cliente.
 
 Una vez que envíes tus datos, te va a llegar un mail con todo lo necesario para que armemos tu pedido. ¡Cualquier duda, avísame!`;
 
