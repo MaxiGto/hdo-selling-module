@@ -90,7 +90,20 @@ export async function runCampaign(def: CampaignDefinition): Promise<void> {
         await setChatwootContactId(contact.id, chatwootId);
       }
 
-      const conversationId = await createConversation(chatwootId, config.chatwoot.inboxId);
+      let conversationId: number;
+      try {
+        conversationId = await createConversation(chatwootId, config.chatwoot.inboxId);
+      } catch (err) {
+        // chatwoot_contact_id stale (contacto eliminado de Chatwoot) → re-crear y reintentar
+        if (String(err).includes("404")) {
+          console.warn(`[campaign] chatwoot_contact_id ${chatwootId} inválido para ${contact.tangoId} — re-creando contacto`);
+          chatwootId = await findOrCreateContact(contact.name, contact.phoneNormalized);
+          await setChatwootContactId(contact.id, chatwootId);
+          conversationId = await createConversation(chatwootId, config.chatwoot.inboxId);
+        } else {
+          throw err;
+        }
+      }
 
       await sendTemplateMessage(conversationId, {
         name: def.template.name,

@@ -161,7 +161,7 @@ export async function getContactForOrder(chatwootContactId: number): Promise<Con
 
 // Chatwoot contact IDs habilitados para crear pedidos (beta).
 // 8608 = Maxi GT, 11390 = Sabrina Barrionuevo.
-const ORDER_CREATION_BETA_IDS = new Set([8608, 11390]);
+const ORDER_CREATION_BETA_IDS = new Set([8608, 11390, 14282]);
 
 export function isOrderCreationEnabled(chatwootContactId: number): boolean {
   return ORDER_CREATION_BETA_IDS.has(chatwootContactId);
