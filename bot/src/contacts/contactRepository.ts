@@ -110,10 +110,12 @@ export async function upsertContact(data: {
 
 // Datos del contacto necesarios para crear un pedido en Tango.
 export interface ContactOrderData {
+  tangoId: string;
   tangoInternalId: number | null;
   cuit: string | null;
   ivaCategory: string | null;
   name: string;
+  phone: string | null;
   sellerCode: string | null;
   provinceCode: string | null;
   priceListNumber: string | null;
@@ -125,10 +127,12 @@ export interface ContactOrderData {
 
 export async function getContactForOrder(chatwootContactId: number): Promise<ContactOrderData | null> {
   const { rows } = await pool.query<{
+    tango_id: string;
     tango_internal_id: number | null;
     cuit: string | null;
     iva_category: string | null;
     name: string;
+    phone_normalized: string | null;
     seller_code: string | null;
     province_code: string | null;
     price_list_number: string | null;
@@ -137,18 +141,20 @@ export async function getContactForOrder(chatwootContactId: number): Promise<Con
     city: string | null;
     postal_code: string | null;
   }>(
-    `SELECT tango_internal_id, cuit, iva_category, name, seller_code,
-            province_code, price_list_number, email, address, city, postal_code
+    `SELECT tango_id, tango_internal_id, cuit, iva_category, name, phone_normalized,
+            seller_code, province_code, price_list_number, email, address, city, postal_code
      FROM contacts WHERE chatwoot_contact_id = $1 LIMIT 1`,
     [chatwootContactId],
   );
   if (!rows[0]) return null;
   const r = rows[0];
   return {
+    tangoId:         r.tango_id,
     tangoInternalId: r.tango_internal_id,
     cuit:            r.cuit,
     ivaCategory:     r.iva_category ?? "RI",
     name:            r.name,
+    phone:           r.phone_normalized,
     sellerCode:      r.seller_code,
     provinceCode:    r.province_code,
     priceListNumber: r.price_list_number,
