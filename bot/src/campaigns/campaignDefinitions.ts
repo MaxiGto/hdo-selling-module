@@ -30,8 +30,8 @@ export interface CampaignDefinition {
 const TEMPLATE_VARS = {
   order_day:  "{{delivery.dayName}}",
   order_date: "{{delivery.date}}",
-  end_day:    "{{end.dayName}}",
-  end_date:   "{{end.date}}",
+  end_day:    "{{end.dayAndDate}}",
+  end_date:   "10hs",
 };
 
 export const CAMPAIGNS: CampaignDefinition[] = [

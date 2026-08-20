@@ -23,11 +23,14 @@ function buildTokens(deliveryOffset: number, endOffset: number) {
   const now = new Date(Date.now() + ART_OFFSET_MS);
   const delivery = new Date(now.getTime() + deliveryOffset * DAY_MS);
   const end      = new Date(now.getTime() + endOffset * DAY_MS);
+  const endDayName = DAY_NAMES_ES[end.getUTCDay()] ?? "";
+  const endDateStr = `${end.getUTCDate()}/${end.getUTCMonth() + 1}`;
   return {
     "{{delivery.dayName}}": DAY_NAMES_ES[delivery.getUTCDay()] ?? "",
     "{{delivery.date}}":    `${delivery.getUTCDate()}/${delivery.getUTCMonth() + 1}`,
-    "{{end.dayName}}":      DAY_NAMES_ES[end.getUTCDay()] ?? "",
-    "{{end.date}}":         `${end.getUTCDate()}/${end.getUTCMonth() + 1}`,
+    "{{end.dayName}}":      endDayName,
+    "{{end.date}}":         endDateStr,
+    "{{end.dayAndDate}}":   `${endDayName} ${endDateStr}`,
   };
 }
 

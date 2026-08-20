@@ -29,11 +29,14 @@ function buildDateTokens(deliveryDateOffset: number, endDayOffset: number): Reco
   const delivery = new Date(nowART.getTime() + deliveryDateOffset * DAY_MS);
   const endDay  = new Date(nowART.getTime() + endDayOffset * DAY_MS);
 
+  const endDayName = DAY_NAMES_ES[endDay.getUTCDay()] ?? "";
+  const endDateStr = `${endDay.getUTCDate()}/${endDay.getUTCMonth() + 1}`;
   return {
     "{{delivery.dayName}}": DAY_NAMES_ES[delivery.getUTCDay()] ?? "",
     "{{delivery.date}}":    `${delivery.getUTCDate()}/${delivery.getUTCMonth() + 1}`,
-    "{{end.dayName}}":      DAY_NAMES_ES[endDay.getUTCDay()] ?? "",
-    "{{end.date}}":         `${endDay.getUTCDate()}/${endDay.getUTCMonth() + 1}`,
+    "{{end.dayName}}":      endDayName,
+    "{{end.date}}":         endDateStr,
+    "{{end.dayAndDate}}":   `${endDayName} ${endDateStr}`,
   };
 }
 
