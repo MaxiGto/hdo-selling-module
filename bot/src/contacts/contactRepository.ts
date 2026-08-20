@@ -52,6 +52,104 @@ export async function getAudienceByDeliveryDay(day: DeliveryDay): Promise<Contac
 }
 
 // Upsert desde el sync con Tango. Nunca pisa opt_out si ya existe.
+export interface ShippingAddress {
+  code: string;
+  address: string | null;
+  provinceCode: string | null;
+  city: string | null;
+  postalCode: string | null;
+  phoneNumber1: string | null;
+  phoneNumber2: string | null;
+  defaultAddress: boolean;
+  enabled: boolean;
+  deliveryHours: string | null;
+  deliversMonday: boolean;
+  deliversTuesday: boolean;
+  deliversWednesday: boolean;
+  deliversThursday: boolean;
+  deliversFriday: boolean;
+  deliversSaturday: boolean;
+  deliversSunday: boolean;
+}
+
+export async function upsertShippingAddresses(contactId: number, addresses: ShippingAddress[]): Promise<void> {
+  for (const a of addresses) {
+    await pool.query(
+      `INSERT INTO contact_shipping_addresses
+         (contact_id, code, address, province_code, city, postal_code,
+          phone_number_1, phone_number_2, default_address, enabled, delivery_hours,
+          delivers_monday, delivers_tuesday, delivers_wednesday,
+          delivers_thursday, delivers_friday, delivers_saturday, delivers_sunday)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+       ON CONFLICT (contact_id, code) DO UPDATE SET
+         address            = EXCLUDED.address,
+         province_code      = EXCLUDED.province_code,
+         city               = EXCLUDED.city,
+         postal_code        = EXCLUDED.postal_code,
+         phone_number_1     = EXCLUDED.phone_number_1,
+         phone_number_2     = EXCLUDED.phone_number_2,
+         default_address    = EXCLUDED.default_address,
+         enabled            = EXCLUDED.enabled,
+         delivery_hours     = EXCLUDED.delivery_hours,
+         delivers_monday    = EXCLUDED.delivers_monday,
+         delivers_tuesday   = EXCLUDED.delivers_tuesday,
+         delivers_wednesday = EXCLUDED.delivers_wednesday,
+         delivers_thursday  = EXCLUDED.delivers_thursday,
+         delivers_friday    = EXCLUDED.delivers_friday,
+         delivers_saturday  = EXCLUDED.delivers_saturday,
+         delivers_sunday    = EXCLUDED.delivers_sunday`,
+      [
+        contactId, a.code, a.address, a.provinceCode, a.city, a.postalCode,
+        a.phoneNumber1, a.phoneNumber2, a.defaultAddress, a.enabled, a.deliveryHours,
+        a.deliversMonday, a.deliversTuesday, a.deliversWednesday,
+        a.deliversThursday, a.deliversFriday, a.deliversSaturday, a.deliversSunday,
+      ],
+    );
+  }
+}
+
+export async function getShippingAddresses(chatwootContactId: number): Promise<ShippingAddress[]> {
+  const { rows } = await pool.query<{
+    code: string; address: string | null; province_code: string | null;
+    city: string | null; postal_code: string | null;
+    phone_number_1: string | null; phone_number_2: string | null;
+    default_address: boolean; enabled: boolean; delivery_hours: string | null;
+    delivers_monday: boolean; delivers_tuesday: boolean; delivers_wednesday: boolean;
+    delivers_thursday: boolean; delivers_friday: boolean;
+    delivers_saturday: boolean; delivers_sunday: boolean;
+  }>(
+    `SELECT csa.code, csa.address, csa.province_code, csa.city, csa.postal_code,
+            csa.phone_number_1, csa.phone_number_2, csa.default_address, csa.enabled,
+            csa.delivery_hours, csa.delivers_monday, csa.delivers_tuesday,
+            csa.delivers_wednesday, csa.delivers_thursday, csa.delivers_friday,
+            csa.delivers_saturday, csa.delivers_sunday
+     FROM contact_shipping_addresses csa
+     JOIN contacts c ON c.id = csa.contact_id
+     WHERE c.chatwoot_contact_id = $1
+     ORDER BY csa.default_address DESC, csa.code`,
+    [chatwootContactId],
+  );
+  return rows.map((r) => ({
+    code:              r.code,
+    address:           r.address,
+    provinceCode:      r.province_code,
+    city:              r.city,
+    postalCode:        r.postal_code,
+    phoneNumber1:      r.phone_number_1,
+    phoneNumber2:      r.phone_number_2,
+    defaultAddress:    r.default_address,
+    enabled:           r.enabled,
+    deliveryHours:     r.delivery_hours,
+    deliversMonday:    r.delivers_monday,
+    deliversTuesday:   r.delivers_tuesday,
+    deliversWednesday: r.delivers_wednesday,
+    deliversThursday:  r.delivers_thursday,
+    deliversFriday:    r.delivers_friday,
+    deliversSaturday:  r.delivers_saturday,
+    deliversSunday:    r.delivers_sunday,
+  }));
+}
+
 export async function upsertContact(data: {
   tangoId: string;
   tangoInternalId?: number | null;
@@ -69,9 +167,9 @@ export async function upsertContact(data: {
     monday: boolean; tuesday: boolean; wednesday: boolean;
     thursday: boolean; friday: boolean; saturday: boolean; sunday: boolean;
   };
-}): Promise<void> {
+}): Promise<number> {
   const d = data.deliveryDays;
-  await pool.query(
+  const { rows } = await pool.query<{ id: number }>(
     `INSERT INTO contacts
        (tango_id, tango_internal_id, name, phone_normalized, province_code, seller_code,
         price_list_number, cuit, email, address, city, postal_code,
@@ -97,7 +195,8 @@ export async function upsertContact(data: {
        delivers_friday    = EXCLUDED.delivers_friday,
        delivers_saturday  = EXCLUDED.delivers_saturday,
        delivers_sunday    = EXCLUDED.delivers_sunday,
-       synced_at          = NOW()`,
+       synced_at          = NOW()
+     RETURNING id`,
     [
       data.tangoId, data.tangoInternalId ?? null,
       data.name, data.phoneNormalized, data.provinceCode, data.sellerCode,
@@ -106,6 +205,7 @@ export async function upsertContact(data: {
       d.monday, d.tuesday, d.wednesday, d.thursday, d.friday, d.saturday, d.sunday,
     ],
   );
+  return rows[0].id;
 }
 
 // Datos del contacto necesarios para crear un pedido en Tango.

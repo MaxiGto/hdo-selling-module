@@ -4,11 +4,13 @@ import { config } from "../config.js";
 interface TangoShippingAddress {
   Code: string;
   Address?: string;
+  ProvinceCode?: string;
   City?: string;
   PostalCode?: string;
   PhoneNumber1?: string;
   PhoneNumber2?: string;
   DefaultAddress: "S" | "N";
+  Enabled?: "S" | "N";
   DeliversMonday:    "S" | "N";
   DeliversTuesday:   "S" | "N";
   DeliversWednesday: "S" | "N";
@@ -87,24 +89,45 @@ function bestPhone(c: TangoCustomer): string | null {
   return null;
 }
 
+export interface TangoShippingAddressFlat {
+  code: string;
+  address: string | null;
+  provinceCode: string | null;
+  city: string | null;
+  postalCode: string | null;
+  phoneNumber1: string | null;
+  phoneNumber2: string | null;
+  defaultAddress: boolean;
+  enabled: boolean;
+  deliveryHours: string | null;
+  deliversMonday: boolean;
+  deliversTuesday: boolean;
+  deliversWednesday: boolean;
+  deliversThursday: boolean;
+  deliversFriday: boolean;
+  deliversSaturday: boolean;
+  deliversSunday: boolean;
+}
+
 export interface TangoCustomerFlat {
   tangoId: string;
-  tangoInternalId: number | null; // ID interno de Tango (ID_GVA14), usado como CustomerID en la API de pedidos
+  tangoInternalId: number | null;
   name: string;
-  businessName: string | null;    // razón social (BusinessName)
+  businessName: string | null;
   phone: string | null;
   email: string | null;
-  address: string | null;         // dirección de entrega principal
+  address: string | null;
   city: string | null;
   postalCode: string | null;
   provinceCode: string | null;
-  documentNumber: string | null;  // CUIT/DNI
+  documentNumber: string | null;
   sellerCode: string | null;
   priceListNumber: string | null;
   deliveryDays: {
     monday: boolean; tuesday: boolean; wednesday: boolean;
     thursday: boolean; friday: boolean; saturday: boolean; sunday: boolean;
   };
+  shippingAddresses: TangoShippingAddressFlat[];
 }
 
 function categoryLabel(priceListNumber: string | null): string {
@@ -123,6 +146,26 @@ function flattenCustomer(c: TangoCustomer): TangoCustomerFlat {
   const defaultAddr = c.ShippingAddresses?.find((a) => a.DefaultAddress === "S");
   const flag = (v?: string) => v === "S";
   const str = (v?: string) => v?.trim() || null;
+
+  const shippingAddresses: TangoShippingAddressFlat[] = (c.ShippingAddresses ?? []).map((a) => ({
+    code:            a.Code,
+    address:         str(a.Address),
+    provinceCode:    str(a.ProvinceCode),
+    city:            str(a.City),
+    postalCode:      str(a.PostalCode),
+    phoneNumber1:    str(a.PhoneNumber1),
+    phoneNumber2:    str(a.PhoneNumber2),
+    defaultAddress:  a.DefaultAddress === "S",
+    enabled:         a.Enabled !== "N",
+    deliveryHours:   str(a.DeliveryHours),
+    deliversMonday:    flag(a.DeliversMonday),
+    deliversTuesday:   flag(a.DeliversTuesday),
+    deliversWednesday: flag(a.DeliversWednesday),
+    deliversThursday:  flag(a.DeliversThursday),
+    deliversFriday:    flag(a.DeliversFriday),
+    deliversSaturday:  flag(a.DeliversSaturday),
+    deliversSunday:    flag(a.DeliversSunday),
+  }));
 
   return {
     tangoId:         c.Code,
@@ -147,6 +190,7 @@ function flattenCustomer(c: TangoCustomer): TangoCustomerFlat {
       saturday:  flag(defaultAddr?.DeliversSaturday),
       sunday:    flag(defaultAddr?.DeliversSunday),
     },
+    shippingAddresses,
   };
 }
 

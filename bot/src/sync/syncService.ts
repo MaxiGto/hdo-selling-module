@@ -1,5 +1,5 @@
 import { fetchAllCustomers } from "./tangoClient.js";
-import { upsertContact, countWithoutDeliveryDays } from "../contacts/contactRepository.js";
+import { upsertContact, upsertShippingAddresses, countWithoutDeliveryDays } from "../contacts/contactRepository.js";
 import { config } from "../config.js";
 
 export async function runSync(): Promise<void> {
@@ -21,7 +21,7 @@ export async function runSync(): Promise<void> {
   for (const c of customers) {
     if (!c.phone) { sinTelefono++; continue; }
 
-    await upsertContact({
+    const contactId = await upsertContact({
       tangoId:         c.tangoId,
       tangoInternalId: c.tangoInternalId,
       name:            c.name,
@@ -36,6 +36,9 @@ export async function runSync(): Promise<void> {
       postalCode:      c.postalCode,
       deliveryDays:    c.deliveryDays,
     });
+    if (c.shippingAddresses.length > 0) {
+      await upsertShippingAddresses(contactId, c.shippingAddresses);
+    }
   }
 
   const sinDias = await countWithoutDeliveryDays();

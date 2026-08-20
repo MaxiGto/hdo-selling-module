@@ -4,6 +4,7 @@ import { buildSystemPrompt } from "./guidelines.js";
 import { fetchConversationMessages, type ChatwootMessage } from "../chatwoot/chatwootClient.js";
 import { searchStock, formatStockResults } from "./productStockRepository.js";
 import { createTangoOrder, type OrderItem } from "../tango/tangoOrderService.js";
+import { getShippingAddresses } from "../contacts/contactRepository.js";
 
 const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
 
@@ -54,12 +55,28 @@ const TOOL_CREAR_PEDIDO: any = {
           required: ["sku_code", "tango_id", "description", "cantidad"],
         },
       },
+      shipping_address_code: {
+        type: SchemaType.STRING,
+        description: "Código de la dirección de envío elegida por el cliente (obtenido de obtener_direcciones_envio)",
+      },
       observaciones: {
         type: SchemaType.STRING,
         description: "Observaciones adicionales del cliente (opcional)",
       },
     },
-    required: ["items"],
+    required: ["items", "shipping_address_code"],
+  },
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const TOOL_DIRECCIONES: any = {
+  name: "obtener_direcciones_envio",
+  description:
+    "Obtiene las direcciones de envío registradas para el cliente. Llamá esta herramienta antes de crear el pedido para mostrarle al cliente sus opciones de entrega y pedirle que confirme o elija una.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {},
+    required: [],
   },
 };
 
@@ -86,7 +103,10 @@ const TOOL_STOCK: any = {
 
 function buildTools(orderCreationEnabled: boolean) {
   const declarations = [TOOL_DERIVAR];
-  if (orderCreationEnabled) declarations.push(TOOL_CREAR_PEDIDO);
+  if (orderCreationEnabled) {
+    declarations.push(TOOL_DIRECCIONES);
+    declarations.push(TOOL_CREAR_PEDIDO);
+  }
   declarations.push(TOOL_STOCK);
   return [{ functionDeclarations: declarations }];
 }
@@ -175,6 +195,39 @@ export async function generateReply(
       };
     }
 
+    // Direcciones de envío del cliente
+    const addressPart = functionCallParts.find(
+      (p) => "functionCall" in p && p.functionCall?.name === "obtener_direcciones_envio",
+    );
+    if (addressPart && chatwootContactId) {
+      const addresses = await getShippingAddresses(chatwootContactId);
+      let addressText: string;
+      if (addresses.length === 0) {
+        addressText = "Este cliente no tiene direcciones de envío registradas.";
+      } else {
+        const lines = addresses.map((a, i) => {
+          const parts = [a.address, a.city, a.postalCode].filter(Boolean).join(", ");
+          const tag = a.defaultAddress ? " (predeterminada)" : "";
+          return `${i + 1}. [${a.code}]${tag} ${parts}`;
+        });
+        addressText = `Direcciones de envío disponibles:\n${lines.join("\n")}`;
+      }
+      contents = [
+        ...contents,
+        { role: "model" as const, parts },
+        {
+          role: "user" as const,
+          parts: [{
+            functionResponse: {
+              name: "obtener_direcciones_envio",
+              response: { result: addressText },
+            },
+          } as Part],
+        },
+      ];
+      continue;
+    }
+
     // Creación de pedido en Tango
     const orderPart = functionCallParts.find(
       (p) => "functionCall" in p && p.functionCall?.name === "crear_pedido",
@@ -182,6 +235,7 @@ export async function generateReply(
     if (orderPart && "functionCall" in orderPart && orderPart.functionCall) {
       const args = orderPart.functionCall.args as {
         items: { sku_code: string; tango_id: number; description: string; cantidad: number }[];
+        shipping_address_code: string;
         observaciones?: string;
       };
 
@@ -202,7 +256,7 @@ export async function generateReply(
 
       try {
         const orderResult = await withTimeout(
-          createTangoOrder(chatwootContactId, orderItems, args.observaciones),
+          createTangoOrder(chatwootContactId, orderItems, args.observaciones, args.shipping_address_code),
           30_000,
         );
         const responseText = orderResult.success

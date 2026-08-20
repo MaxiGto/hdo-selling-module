@@ -1,6 +1,6 @@
 import { config } from "../config.js";
 import pool from "../db/pool.js";
-import { getContactForOrder } from "../contacts/contactRepository.js";
+import { getContactForOrder, getShippingAddresses, type ShippingAddress } from "../contacts/contactRepository.js";
 
 export interface OrderItem {
   skuCode: string;
@@ -23,10 +23,34 @@ function basePriceList(priceListNumber: string | null): number {
   return 100; // default comercio
 }
 
+function formatShippingAddress(a: ShippingAddress) {
+  const flag = (b: boolean) => b ? "S" : "N";
+  return {
+    Code:              a.code,
+    Address:           a.address ?? "",
+    ProvinceCode:      a.provinceCode ?? "0",
+    City:              a.city ?? "",
+    PostalCode:        a.postalCode ?? "",
+    PhoneNumber1:      a.phoneNumber1 ?? "",
+    PhoneNumber2:      a.phoneNumber2 ?? "",
+    DefaultAddress:    flag(a.defaultAddress),
+    Enabled:           flag(a.enabled),
+    DeliveryHours:     a.deliveryHours ?? "",
+    DeliversMonday:    flag(a.deliversMonday),
+    DeliversTuesday:   flag(a.deliversTuesday),
+    DeliversWednesday: flag(a.deliversWednesday),
+    DeliversThursday:  flag(a.deliversThursday),
+    DeliversFriday:    flag(a.deliversFriday),
+    DeliversSaturday:  flag(a.deliversSaturday),
+    DeliversSunday:    flag(a.deliversSunday),
+  };
+}
+
 export async function createTangoOrder(
   chatwootContactId: number,
   items: OrderItem[],
   observaciones?: string,
+  shippingAddressCode?: string,
 ): Promise<OrderResult> {
   // ── 1. Datos del contacto ────────────────────────────────────────────────
   console.log(`[order] iniciando pedido para chatwootContactId=${chatwootContactId}`);
@@ -62,7 +86,22 @@ export async function createTangoOrder(
     };
   }
 
-  // ── 3. Armar body del pedido ─────────────────────────────────────────────
+  // ── 3. Dirección de envío ────────────────────────────────────────────────
+  const allAddresses = await getShippingAddresses(chatwootContactId);
+  let selectedAddress: ShippingAddress | undefined;
+  if (shippingAddressCode) {
+    selectedAddress = allAddresses.find((a) => a.code === shippingAddressCode);
+    if (!selectedAddress) {
+      console.warn(`[order] dirección "${shippingAddressCode}" no encontrada — usando la predeterminada`);
+    }
+  }
+  if (!selectedAddress) {
+    selectedAddress = allAddresses.find((a) => a.defaultAddress) ?? allAddresses[0];
+  }
+  const shippingAddressesPayload = selectedAddress ? [formatShippingAddress(selectedAddress)] : [];
+  console.log(`[order] dirección de envío: ${selectedAddress?.address ?? "sin dirección"} — ${selectedAddress?.city ?? ""}`);
+
+  // ── 4. Armar body del pedido ─────────────────────────────────────────────
   const orderItems = items.map((item) => ({
     ProductCode: String(item.tangoId),
     SKUCode:     item.skuCode,
@@ -112,13 +151,14 @@ export async function createTangoOrder(
       NumberListPrice: priceList,
       Removed:         false,
     },
-    CancelOrder: false,
-    OrderItems:  orderItems,
-    CashPayments: null,
-    Payments:     null,
+    CancelOrder:       false,
+    OrderItems:        orderItems,
+    ShippingAddresses: shippingAddressesPayload,
+    CashPayments:      null,
+    Payments:          null,
   };
 
-  // ── 4. POST a la API de Tiendas ──────────────────────────────────────────
+  // ── 5. POST a la API de Tiendas ──────────────────────────────────────────
   const bodyJson = JSON.stringify(body);
   console.log(`[order] enviando pedido:\n${bodyJson}`);
 

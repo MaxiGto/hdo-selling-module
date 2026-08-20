@@ -87,6 +87,29 @@ CREATE TABLE IF NOT EXISTS price_cache (
   last_synced_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (sku_code, price_list_number)
 );
+
+CREATE TABLE IF NOT EXISTS contact_shipping_addresses (
+  id                 SERIAL PRIMARY KEY,
+  contact_id         INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  code               TEXT NOT NULL,
+  address            TEXT,
+  province_code      TEXT,
+  city               TEXT,
+  postal_code        TEXT,
+  phone_number_1     TEXT,
+  phone_number_2     TEXT,
+  default_address    BOOLEAN NOT NULL DEFAULT FALSE,
+  enabled            BOOLEAN NOT NULL DEFAULT TRUE,
+  delivery_hours     TEXT,
+  delivers_monday    BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_tuesday   BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_wednesday BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_thursday  BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_friday    BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_saturday  BOOLEAN NOT NULL DEFAULT FALSE,
+  delivers_sunday    BOOLEAN NOT NULL DEFAULT FALSE,
+  UNIQUE (contact_id, code)
+);
 `;
 
 export async function runMigrations(): Promise<void> {
