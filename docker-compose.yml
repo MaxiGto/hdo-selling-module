@@ -1,7 +1,7 @@
 x-chatwoot: &chatwoot
   # Versión pineada (releases: https://github.com/chatwoot/chatwoot/releases).
   # Subir de versión a conciencia: cambiar el tag, leer el changelog y reiniciar.
-  image: chatwoot/chatwoot:v4.14.2
+  image: chatwoot/chatwoot:v4.17.0
   env_file: .env
   volumes:
     - storage:/app/storage
