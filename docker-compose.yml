@@ -109,6 +109,15 @@ services:
       - TANGO_PAGE_SIZE=${TANGO_PAGE_SIZE}
     restart: unless-stopped
 
+  # ---------- Módulo Logístico: Frontend (estáticos servidos por nginx) ----------
+  # No expone puertos al exterior: Caddy lo alcanza por la red interna
+  # como http://logistic-frontend:80
+  logistic-frontend:
+    build: ../logistic-module/frontend
+    restart: unless-stopped
+    depends_on:
+      - logistic-backend
+
   # ---------- Reverse proxy + HTTPS automático ----------
   caddy:
     image: caddy:2-alpine
@@ -121,6 +130,7 @@ services:
       - "443:443"
     environment:
       - CHATWOOT_DOMAIN=${CHATWOOT_DOMAIN}
+      - ADMIN_DOMAIN=${ADMIN_DOMAIN}
       - ACME_EMAIL=${ACME_EMAIL}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile

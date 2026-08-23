@@ -13,3 +13,13 @@
 
 	reverse_proxy rails:3000
 }
+
+# Panel admin (módulo logístico y futuras funcionalidades administrativas).
+{$ADMIN_DOMAIN} {
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy logistic-backend:3001
+	}
+
+	reverse_proxy logistic-frontend:80
+}
