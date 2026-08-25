@@ -9,7 +9,7 @@ Para poder hacer tu primer pedido y darte de alta en el sistema, necesitamos reg
 
 Para que ya lo vayas teniendo en cuenta:
 
-🛍️ Mínimo de compra: $80.000 + IVA.
+🛍️ Mínimo de compra: $100.000 + IVA.
 
 🚚 Envío SIN CARGO en CABA y GBA.
 

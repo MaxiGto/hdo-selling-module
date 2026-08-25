@@ -53,7 +53,7 @@ Si te preguntan el precio de un producto puntual, remitílos a la lista (ahí es
 
 PEDIDO MÍNIMO Y ENVÍO
 
-Mínimo de compra: $80.000 + IVA.
+Mínimo de compra: $100.000 + IVA.
 
 Política de envío:
 - CABA y GBA: envío sin costo.
