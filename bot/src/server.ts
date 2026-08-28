@@ -12,6 +12,38 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "oasis-whatsapp-bot" });
 });
 
+// Chequeo liviano de Gemini: lista modelos en vez de generar contenido,
+// así no consume cuota de generación y devuelve el status HTTP real de Google.
+app.get("/health/gemini", async (_req, res) => {
+  if (!config.gemini.apiKey) {
+    return res.status(503).json({ status: "error", error: "GEMINI_API_KEY no configurada" });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${config.gemini.apiKey}`;
+    const response = await fetch(url, { signal: controller.signal });
+
+    if (response.ok) {
+      return res.json({ status: "ok", httpStatus: response.status });
+    }
+
+    const body = await response.text().catch(() => "");
+    return res.status(502).json({
+      status: "error",
+      httpStatus: response.status,
+      error: body.slice(0, 300) || `HTTP ${response.status}`,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return res.status(502).json({ status: "error", error: message });
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
 // Webhook del Agent Bot de Chatwoot: recibe mensajes y responde con el agente IA.
 app.post("/chatwoot/webhook", handleChatwootWebhook);
 
