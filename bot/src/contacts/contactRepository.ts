@@ -288,6 +288,27 @@ export async function getCategoryByChatwootId(chatwootContactId: number): Promis
   return null;
 }
 
+// Rate-limit para el template de cliente no registrado: máximo 1 vez por día.
+export async function wasUnregisteredTemplateSentToday(chatwootContactId: number): Promise<boolean> {
+  const { rows } = await pool.query<{ sent: boolean }>(
+    `SELECT EXISTS(
+       SELECT 1 FROM unregistered_rate_limit
+       WHERE chatwoot_contact_id = $1 AND last_sent_date = CURRENT_DATE
+     ) AS sent`,
+    [chatwootContactId],
+  );
+  return rows[0]?.sent ?? false;
+}
+
+export async function markUnregisteredTemplateSent(chatwootContactId: number): Promise<void> {
+  await pool.query(
+    `INSERT INTO unregistered_rate_limit (chatwoot_contact_id, last_sent_date)
+     VALUES ($1, CURRENT_DATE)
+     ON CONFLICT (chatwoot_contact_id) DO UPDATE SET last_sent_date = CURRENT_DATE`,
+    [chatwootContactId],
+  );
+}
+
 // Devuelve true si el contacto está registrado en la DB del bot (sync desde Tango).
 export async function isRegisteredContact(chatwootContactId: number): Promise<boolean> {
   const { rows } = await pool.query<{ exists: boolean }>(

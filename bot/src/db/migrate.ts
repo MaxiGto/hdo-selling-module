@@ -110,6 +110,11 @@ CREATE TABLE IF NOT EXISTS contact_shipping_addresses (
   delivers_sunday    BOOLEAN NOT NULL DEFAULT FALSE,
   UNIQUE (contact_id, code)
 );
+
+CREATE TABLE IF NOT EXISTS unregistered_rate_limit (
+  chatwoot_contact_id INTEGER PRIMARY KEY,
+  last_sent_date      DATE NOT NULL
+);
 `;
 
 export async function runMigrations(): Promise<void> {

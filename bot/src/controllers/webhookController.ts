@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { generateReply } from "../agent/agentService.js";
 import { isHandedOff, markHandedOff } from "../agent/handoffRepository.js";
 import { sendMessage, openConversation } from "../chatwoot/chatwootClient.js";
-import { resetNoResponseStreak, getCategoryByChatwootId, isOrderCreationEnabled, isRegisteredContact } from "../contacts/contactRepository.js";
+import { resetNoResponseStreak, getCategoryByChatwootId, isOrderCreationEnabled, isRegisteredContact, wasUnregisteredTemplateSentToday, markUnregisteredTemplateSent } from "../contacts/contactRepository.js";
 import { TEMPLATE_CLIENTE_NUEVO } from "../agent/templates.js";
 
 // Idempotencia básica: evita procesar el mismo message.id dos veces en el mismo proceso.
@@ -20,10 +20,25 @@ async function processEvent(payload: any): Promise<void> {
   try {
     if (payload?.event !== "message_created") return;
 
-    // Solo respondemos a mensajes entrantes del cliente
+    // Solo respondemos a mensajes entrantes del cliente.
+    // Mensajes salientes: si los envía un asesor humano, marcar la conversación como derivada.
     const isIncoming =
       payload?.message_type === "incoming" || payload?.message_type === 0;
-    if (!isIncoming) return;
+    if (!isIncoming) {
+      const isOutgoing =
+        payload?.message_type === "outgoing" || payload?.message_type === 1;
+      if (isOutgoing && typeof conversationId === "number") {
+        console.log(`[bot] mensaje outgoing en conv. ${conversationId} — sender:`, JSON.stringify(payload?.sender));
+        const senderType: unknown = payload?.sender?.type;
+        if (senderType === "user" || senderType === "agent") {
+          if (!await isHandedOff(conversationId)) {
+            await markHandedOff(conversationId, "asesor tomó la conversación");
+            console.log(`[bot] conv. ${conversationId} — asesor envió mensaje, marcando como derivada`);
+          }
+        }
+      }
+      return;
+    }
 
     const messageId: unknown = payload?.id;
     if (typeof messageId === "number") {
@@ -69,11 +84,18 @@ async function processEvent(payload: any): Promise<void> {
     if (!content) return;
 
     // Cliente no registrado en la DB del bot (no está en Tango) → mensaje de alta, sin AI
+    // Rate-limit: se envía como máximo 1 vez por día para no ser molesto.
     if (typeof chatwootContactId === "number") {
       const registered = await isRegisteredContact(chatwootContactId);
       if (!registered) {
-        console.log(`[bot] conv. ${conversationId} — cliente no registrado (chatwootId=${chatwootContactId}), enviando template de alta`);
-        await sendMessage(conversationId, TEMPLATE_CLIENTE_NUEVO);
+        const alreadySentToday = await wasUnregisteredTemplateSentToday(chatwootContactId);
+        if (!alreadySentToday) {
+          console.log(`[bot] conv. ${conversationId} — cliente no registrado (chatwootId=${chatwootContactId}), enviando template de alta`);
+          await sendMessage(conversationId, TEMPLATE_CLIENTE_NUEVO);
+          await markUnregisteredTemplateSent(chatwootContactId);
+        } else {
+          console.log(`[bot] conv. ${conversationId} — cliente no registrado (chatwootId=${chatwootContactId}), template ya enviado hoy, ignorando`);
+        }
         return;
       }
     }
