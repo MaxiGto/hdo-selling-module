@@ -27,13 +27,16 @@ async function processEvent(payload: any): Promise<void> {
     if (!isIncoming) {
       const isOutgoing =
         payload?.message_type === "outgoing" || payload?.message_type === 1;
-      if (isOutgoing && typeof conversationId === "number") {
-        console.log(`[bot] mensaje outgoing en conv. ${conversationId} — sender:`, JSON.stringify(payload?.sender));
-        const senderType: unknown = payload?.sender?.type;
-        if (senderType === "user" || senderType === "agent") {
-          if (!await isHandedOff(conversationId)) {
-            await markHandedOff(conversationId, "asesor tomó la conversación");
-            console.log(`[bot] conv. ${conversationId} — asesor envió mensaje, marcando como derivada`);
+      if (isOutgoing) {
+        const outgoingConvId: unknown = payload?.conversation?.id;
+        if (typeof outgoingConvId === "number") {
+          console.log(`[bot] mensaje outgoing en conv. ${outgoingConvId} — sender:`, JSON.stringify(payload?.sender));
+          const senderType: unknown = payload?.sender?.type;
+          if (senderType === "user" || senderType === "agent") {
+            if (!await isHandedOff(outgoingConvId)) {
+              await markHandedOff(outgoingConvId, "asesor tomó la conversación");
+              console.log(`[bot] conv. ${outgoingConvId} — asesor envió mensaje, marcando como derivada`);
+            }
           }
         }
       }
