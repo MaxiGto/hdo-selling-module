@@ -107,6 +107,12 @@ services:
       - TANGO_API_BASE_URL=${TANGO_API_BASE_URL}
       - TANGO_ACCESS_TOKEN=${TANGO_ACCESS_TOKEN}
       - TANGO_PAGE_SIZE=${TANGO_PAGE_SIZE}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     restart: unless-stopped
 
   # ---------- Módulo Logístico: Frontend (estáticos servidos por nginx) ----------
@@ -116,7 +122,8 @@ services:
     build: ../logistic-module/frontend
     restart: unless-stopped
     depends_on:
-      - logistic-backend
+      logistic-backend:
+        condition: service_healthy
 
   # ---------- Reverse proxy + HTTPS automático ----------
   caddy:
