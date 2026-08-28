@@ -12,9 +12,9 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "oasis-whatsapp-bot" });
 });
 
-// Chequeo liviano de Gemini: lista modelos en vez de generar contenido,
+// Chequeo liviano de la IA (Gemini): lista modelos en vez de generar contenido,
 // así no consume cuota de generación y devuelve el status HTTP real de Google.
-app.get("/health/gemini", async (_req, res) => {
+app.get("/health/ia", async (_req, res) => {
   if (!config.gemini.apiKey) {
     return res.status(503).json({ status: "error", error: "GEMINI_API_KEY no configurada" });
   }
@@ -31,13 +31,12 @@ app.get("/health/gemini", async (_req, res) => {
     }
 
     const body = await response.text().catch(() => "");
-    return res.status(502).json({
-      status: "error",
-      httpStatus: response.status,
-      error: body.slice(0, 300) || `HTTP ${response.status}`,
-    });
+    const error = body.slice(0, 300) || `HTTP ${response.status}`;
+    console.error("[health/ia] Gemini no responde OK:", error);
+    return res.status(502).json({ status: "error", httpStatus: response.status, error });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    console.error("[health/ia] Gemini inalcanzable:", message);
     return res.status(502).json({ status: "error", error: message });
   } finally {
     clearTimeout(timeout);
