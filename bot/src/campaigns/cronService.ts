@@ -47,12 +47,16 @@ export function startCrons(): void {
 
   // 5 difusiones: lunes a viernes a las 9:00 hs.
   // Cada una envía a los clientes que reciben entrega 2 días hábiles después.
-  for (const def of CAMPAIGNS) {
-    const dow = DOW[def.sendDay];
-    const expr = `0 9 * * ${dow}`;
-    schedule(expr, () => void runCampaign(def), { timezone: TZ });
-    console.log(
-      `[cron] difusión ${def.sendDay.padEnd(9)} (entrega ${def.deliveryDay}) → ${expr} (ART)`,
-    );
+  if (process.env.DISABLE_CAMPAIGNS === "true") {
+    console.log("[cron] difusiones deshabilitadas por DISABLE_CAMPAIGNS=true — no se programan");
+  } else {
+    for (const def of CAMPAIGNS) {
+      const dow = DOW[def.sendDay];
+      const expr = `0 9 * * ${dow}`;
+      schedule(expr, () => void runCampaign(def), { timezone: TZ });
+      console.log(
+        `[cron] difusión ${def.sendDay.padEnd(9)} (entrega ${def.deliveryDay}) → ${expr} (ART)`,
+      );
+    }
   }
 }
