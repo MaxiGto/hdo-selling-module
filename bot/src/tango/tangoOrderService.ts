@@ -12,6 +12,7 @@ export interface OrderItem {
 export interface OrderResult {
   success: boolean;
   orderId?: string;
+  orderId2?: string; // segundo pedido en caso de factura_remito
   error?: string;
 }
 
@@ -46,6 +47,117 @@ function formatShippingAddress(a: ShippingAddress) {
   };
 }
 
+interface OrderContext {
+  tangoInternalId: number;
+  tangoId: string;
+  ivaCategory: string;
+  cuit: string | null;
+  name: string;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  provinceCode: string | null;
+  postalCode: string | null;
+  phone: string | null;
+  sellerCode: string | null;
+  priceList: number;
+  shippingAddresses: ReturnType<typeof formatShippingAddress>[];
+  comment: string | null;
+}
+
+function buildOrderBody(
+  ctx: OrderContext,
+  items: OrderItem[],
+  priceMap: Map<string, number>,
+  customerCode: string,
+  applyIva: boolean,
+  orderId: string,
+) {
+  const orderItems = items.map((item) => ({
+    ProductCode: String(item.tangoId),
+    SKUCode:     item.skuCode,
+    Description: item.description,
+    Quantity:    item.quantity,
+    UnitPrice:   priceMap.get(item.skuCode)!,
+    DiscountPercentage: 0.0,
+  }));
+
+  const subtotal = orderItems.reduce((sum, i) => sum + i.UnitPrice * i.Quantity, 0);
+  const total = applyIva ? subtotal * 1.21 : subtotal;
+
+  return {
+    OrderID:     orderId,
+    OrderNumber: orderId.slice(-6),
+    Date:        new Date().toISOString().slice(0, 19),
+    Total:       total,
+    TotalDiscount:      0.0,
+    PaidTotal:          0.0,
+    FinancialSurcharge: 0.0,
+    WarehouseCode:     "1",
+    SellerCode:        ctx.sellerCode ?? "OA",
+    SaleConditionCode: 19,
+    PriceListNumber:   ctx.priceList,
+    ValidateTotalWithPaidTotal: false,
+    ValidateTotalWithItems:     false,
+    Comment:     ctx.comment,
+    Customer: {
+      CustomerID:      ctx.tangoInternalId,
+      Code:            customerCode,
+      DocumentType:    "80",
+      DocumentNumber:  (ctx.cuit ?? "").replace(/[-\s]/g, ""),
+      IVACategoryCode: ctx.ivaCategory,
+      User:            "ADMIN",
+      BusinessName:    ctx.name.replace(/^[^-]+ - /, ""),
+      Email:           ctx.email ?? "",
+      Street:          ctx.address ?? "",
+      HouseNumber:     "",
+      Floor:           "",
+      Apartment:       "",
+      City:            ctx.city ?? "",
+      ProvinceCode:    ctx.provinceCode ?? "0",
+      PostalCode:      ctx.postalCode ?? "",
+      PhoneNumber1:    ctx.phone ?? "",
+      BusinessAddress: ctx.address ?? "",
+      NumberListPrice: ctx.priceList,
+      Removed:         false,
+    },
+    CancelOrder:       false,
+    OrderItems:        orderItems,
+    ShippingAddresses: ctx.shippingAddresses,
+    CashPayments:      null,
+    Payments:          null,
+  };
+}
+
+async function sendOrder(
+  ctx: OrderContext,
+  items: OrderItem[],
+  priceMap: Map<string, number>,
+  customerCode: string,
+  applyIva: boolean,
+  orderId: string,
+): Promise<{ success: boolean; orderId?: string; error?: string }> {
+  const body = buildOrderBody(ctx, items, priceMap, customerCode, applyIva, orderId);
+  const bodyJson = JSON.stringify(body);
+  console.log(`[order] enviando pedido ${orderId} (${applyIva ? "con IVA" : "sin IVA"}, code=${customerCode}):\n${bodyJson}`);
+
+  const res = await fetch(`${config.tango.baseUrl}/api/Aperture/order`, {
+    method:  "POST",
+    headers: { accesstoken: config.tango.accessToken, "Content-Type": "application/json" },
+    body:    bodyJson,
+  });
+
+  const responseText = await res.text();
+  if (!res.ok) {
+    console.error(`[order] falló (${res.status}): ${responseText}`);
+    return { success: false, error: `Error al crear pedido en Tango (${res.status})` };
+  }
+
+  const total = body.Total;
+  console.log(`[order] pedido creado: ${orderId} — total: $${total.toFixed(2)} — respuesta Tango: ${responseText}`);
+  return { success: true, orderId };
+}
+
 export async function createTangoOrder(
   chatwootContactId: number,
   items: OrderItem[],
@@ -59,7 +171,7 @@ export async function createTangoOrder(
     console.error(`[order] contacto no encontrado en DB (chatwootContactId=${chatwootContactId})`);
     return { success: false, error: "Contacto no encontrado en la base de datos del bot" };
   }
-  console.log(`[order] contacto: ${contact.name} | tangoInternalId=${contact.tangoInternalId} | lista=${contact.priceListNumber}`);
+  console.log(`[order] contacto: ${contact.name} | tangoInternalId=${contact.tangoInternalId} | lista=${contact.priceListNumber} | condicion=${contact.billingCondition ?? "sin condición"}`);
   if (!contact.tangoInternalId) {
     console.error(`[order] contacto sin tango_internal_id — sync pendiente`);
     return { success: false, error: "El contacto no tiene ID interno de Tango (pendiente de sync)" };
@@ -101,79 +213,67 @@ export async function createTangoOrder(
   const shippingAddressesPayload = selectedAddress ? [formatShippingAddress(selectedAddress)] : [];
   console.log(`[order] dirección de envío: ${selectedAddress?.address ?? "sin dirección"} — ${selectedAddress?.city ?? ""}`);
 
-  // ── 4. Armar body del pedido ─────────────────────────────────────────────
-  const orderItems = items.map((item) => ({
-    ProductCode: String(item.tangoId),
-    SKUCode:     item.skuCode,
-    Description: item.description,
-    Quantity:    item.quantity,
-    UnitPrice:   priceMap.get(item.skuCode)!,
-    DiscountPercentage: 0.0,
-  }));
-
-  const total = orderItems.reduce((sum, i) => sum + i.UnitPrice * i.Quantity, 0);
-
-  const orderId = `BOT-${chatwootContactId}-${Date.now()}`;
-
-  const body = {
-    OrderID:     orderId,
-    OrderNumber: String(Date.now()).slice(-6),
-    Date:        new Date().toISOString().slice(0, 19),
-    Total:       total,
-    TotalDiscount:     0.0,
-    PaidTotal:         0.0,
-    FinancialSurcharge: 0.0,
-    WarehouseCode:     "1",
-    SellerCode:        contact.sellerCode ?? "OA",
-    SaleConditionCode: 19,
-    PriceListNumber:   priceList,
-    ValidateTotalWithPaidTotal: false,
-    ValidateTotalWithItems:     false,
-    Comment:     observaciones ?? null,
-    Customer: {
-      CustomerID:      contact.tangoInternalId,
-      Code:            contact.tangoId,
-      DocumentType:    "80",
-      DocumentNumber:  (contact.cuit ?? "").replace(/[-\s]/g, ""),
-      IVACategoryCode: contact.ivaCategory ?? "RI",
-      User:            "ADMIN",
-      BusinessName:    contact.name.replace(/^[^-]+ - /, ""),
-      Email:           contact.email ?? "",
-      Street:          contact.address ?? "",
-      HouseNumber:     "",
-      Floor:           "",
-      Apartment:       "",
-      City:            contact.city ?? "",
-      ProvinceCode:    contact.provinceCode ?? "0",
-      PostalCode:      contact.postalCode ?? "",
-      PhoneNumber1:    contact.phone ?? "",
-      BusinessAddress: contact.address ?? "",
-      NumberListPrice: priceList,
-      Removed:         false,
-    },
-    CancelOrder:       false,
-    OrderItems:        orderItems,
-    ShippingAddresses: shippingAddressesPayload,
-    CashPayments:      null,
-    Payments:          null,
+  // ── 4. Contexto común ───────────────────────────────────────────────────
+  const ctx: OrderContext = {
+    tangoInternalId: contact.tangoInternalId,
+    tangoId:         contact.tangoId,
+    ivaCategory:     contact.ivaCategory ?? "RI",
+    cuit:            contact.cuit,
+    name:            contact.name,
+    email:           contact.email,
+    address:         contact.address,
+    city:            contact.city,
+    provinceCode:    contact.provinceCode,
+    postalCode:      contact.postalCode,
+    phone:           contact.phone,
+    sellerCode:      contact.sellerCode,
+    priceList,
+    shippingAddresses: shippingAddressesPayload,
+    comment:         observaciones ?? null,
   };
 
-  // ── 5. POST a la API de Tiendas ──────────────────────────────────────────
-  const bodyJson = JSON.stringify(body);
-  console.log(`[order] enviando pedido:\n${bodyJson}`);
+  const ts = Date.now();
+  const codeC = contact.tangoId;
+  const codeX = contact.tangoId.replace(/^C/, "X");
+  const billingCondition = contact.billingCondition;
 
-  const res = await fetch(`${config.tango.baseUrl}/api/Aperture/order`, {
-    method:  "POST",
-    headers: { accesstoken: config.tango.accessToken, "Content-Type": "application/json" },
-    body:    bodyJson,
-  });
-
-  const responseText = await res.text();
-  if (!res.ok) {
-    console.error(`[order] falló (${res.status}): ${responseText}`);
-    return { success: false, error: `Error al crear pedido en Tango (${res.status})` };
+  // ── 5. Enviar según condición de facturación ─────────────────────────────
+  if (billingCondition === "remito") {
+    const orderId = `BOT-${chatwootContactId}-${ts}-R`;
+    return sendOrder(ctx, items, priceMap, codeX, false, orderId);
   }
 
-  console.log(`[order] pedido creado: ${orderId} — total: $${total.toFixed(2)} — respuesta Tango: ${responseText}`);
-  return { success: true, orderId };
+  if (billingCondition === "factura_remito") {
+    // Dividir los SKUs: la mitad va a factura, el resto a remito.
+    // Si la cantidad es impar, remito se lleva el SKU extra.
+    const facturaCount = Math.floor(items.length / 2);
+    const facturaItems = items.slice(0, facturaCount);
+    const remitoItems  = items.slice(facturaCount);
+
+    console.log(`[order] factura_remito — ${items.length} SKUs → factura: ${facturaCount}, remito: ${remitoItems.length}`);
+
+    const orderIdF = `BOT-${chatwootContactId}-${ts}-F`;
+    const orderIdR = `BOT-${chatwootContactId}-${ts}-R`;
+
+    // Si solo hay 1 SKU, todo va a remito (no hay nada para factura).
+    if (facturaItems.length === 0) {
+      console.log(`[order] factura_remito con 1 solo SKU — enviando todo como remito`);
+      return sendOrder(ctx, remitoItems, priceMap, codeX, false, orderIdR);
+    }
+
+    const resultF = await sendOrder(ctx, facturaItems, priceMap, codeC, true,  orderIdF);
+    if (!resultF.success) return resultF;
+
+    const resultR = await sendOrder(ctx, remitoItems, priceMap, codeX, false, orderIdR);
+    if (!resultR.success) return resultR;
+
+    return { success: true, orderId: orderIdF, orderId2: orderIdR };
+  }
+
+  // factura (o sin condición configurada — se factura con IVA por defecto)
+  if (billingCondition !== "factura") {
+    console.warn(`[order] billing_condition="${billingCondition ?? "null"}" — usando factura con IVA por defecto`);
+  }
+  const orderId = `BOT-${chatwootContactId}-${ts}-F`;
+  return sendOrder(ctx, items, priceMap, codeC, true, orderId);
 }

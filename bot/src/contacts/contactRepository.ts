@@ -223,6 +223,7 @@ export interface ContactOrderData {
   address: string | null;
   city: string | null;
   postalCode: string | null;
+  billingCondition: string | null;
 }
 
 export async function getContactForOrder(chatwootContactId: number): Promise<ContactOrderData | null> {
@@ -240,28 +241,31 @@ export async function getContactForOrder(chatwootContactId: number): Promise<Con
     address: string | null;
     city: string | null;
     postal_code: string | null;
+    billing_condition: string | null;
   }>(
     `SELECT tango_id, tango_internal_id, cuit, iva_category, name, phone_normalized,
-            seller_code, province_code, price_list_number, email, address, city, postal_code
+            seller_code, province_code, price_list_number, email, address, city, postal_code,
+            billing_condition
      FROM contacts WHERE chatwoot_contact_id = $1 LIMIT 1`,
     [chatwootContactId],
   );
   if (!rows[0]) return null;
   const r = rows[0];
   return {
-    tangoId:         r.tango_id,
-    tangoInternalId: r.tango_internal_id,
-    cuit:            r.cuit,
-    ivaCategory:     r.iva_category ?? "RI",
-    name:            r.name,
-    phone:           r.phone_normalized,
-    sellerCode:      r.seller_code,
-    provinceCode:    r.province_code,
-    priceListNumber: r.price_list_number,
-    email:           r.email,
-    address:         r.address,
-    city:            r.city,
-    postalCode:      r.postal_code,
+    tangoId:          r.tango_id,
+    tangoInternalId:  r.tango_internal_id,
+    cuit:             r.cuit,
+    ivaCategory:      r.iva_category ?? "RI",
+    name:             r.name,
+    phone:            r.phone_normalized,
+    sellerCode:       r.seller_code,
+    provinceCode:     r.province_code,
+    priceListNumber:  r.price_list_number,
+    email:            r.email,
+    address:          r.address,
+    city:             r.city,
+    postalCode:       r.postal_code,
+    billingCondition: r.billing_condition,
   };
 }
 
