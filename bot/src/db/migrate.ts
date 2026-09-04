@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS product_stock_cache (
 // Migraciones incrementales (ALTER): seguras de correr en cada deploy.
 const MIGRATIONS = `
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS no_response_streak INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS billing_condition TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS price_list_number TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS delivery_zone TEXT;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS tango_internal_id INTEGER;
@@ -114,6 +115,15 @@ CREATE TABLE IF NOT EXISTS contact_shipping_addresses (
 CREATE TABLE IF NOT EXISTS unregistered_rate_limit (
   chatwoot_contact_id INTEGER PRIMARY KEY,
   last_sent_date      DATE NOT NULL
+);
+
+-- Rate-limit semanal por plantilla: evita enviar la misma difusión más de 1 vez
+-- por semana por contacto. iso_week = "YYYY-WNN" (semana ISO, ART).
+CREATE TABLE IF NOT EXISTS campaign_weekly_limit (
+  contact_id    INTEGER NOT NULL REFERENCES contacts(id),
+  template_name TEXT NOT NULL,
+  iso_week      TEXT NOT NULL,
+  PRIMARY KEY (contact_id, template_name, iso_week)
 );
 `;
 
