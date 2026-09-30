@@ -57,6 +57,21 @@ export async function searchStock(query: string): Promise<StockResult[]> {
   }));
 }
 
+// Resuelve SKUs contra el catálogo (ignora mayúsculas/espacios). Devuelve el SKU y el
+// tango_id reales de la base: nunca confiamos en los que arma el modelo.
+export async function findProductsBySku(
+  skuCodes: string[],
+): Promise<Map<string, { skuCode: string; tangoId: number | null; description: string }>> {
+  const normalized = skuCodes.map((s) => s.trim().toUpperCase());
+  const { rows } = await pool.query<{ sku_code: string; tango_id: number | null; description: string }>(
+    `SELECT sku_code, tango_id, description FROM product_stock_cache WHERE UPPER(sku_code) = ANY($1)`,
+    [normalized],
+  );
+  return new Map(
+    rows.map((r) => [r.sku_code.toUpperCase(), { skuCode: r.sku_code, tangoId: r.tango_id, description: r.description }]),
+  );
+}
+
 // Formatea candidatos para que el modelo los evalúe.
 // Nunca expone cantidades exactas: solo indica si hay stock suficiente para
 // la cantidad pedida, o si hay/no hay stock en caso de consulta libre.

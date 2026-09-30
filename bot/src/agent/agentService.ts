@@ -1,7 +1,7 @@
 import { SchemaType, type FunctionDeclaration } from "@google/generative-ai";
 import { buildSystemPrompt } from "./guidelines.js";
 import { fetchConversationMessages, type ChatwootMessage } from "../chatwoot/chatwootClient.js";
-import { searchStock, formatStockResults } from "./productStockRepository.js";
+import { searchStock, formatStockResults, findProductsBySku } from "./productStockRepository.js";
 import { createTangoOrder, type OrderItem } from "../tango/tangoOrderService.js";
 import { getShippingAddresses } from "../contacts/contactRepository.js";
 import { logBotEvent } from "../metrics/botEventsRepository.js";
@@ -46,12 +46,11 @@ const TOOL_CREAR_PEDIDO: any = {
         items: {
           type: SchemaType.OBJECT,
           properties: {
-            sku_code:    { type: SchemaType.STRING, description: "Código SKU obtenido de consultar_stock" },
-            tango_id:    { type: SchemaType.NUMBER, description: "ID interno de Tango obtenido de consultar_stock" },
+            sku_code:    { type: SchemaType.STRING, description: "Código SKU exacto que aparece entre corchetes en el resultado de consultar_stock (ej: '08INF042'). Nunca la descripción." },
             description: { type: SchemaType.STRING, description: "Descripción del producto" },
             cantidad:    { type: SchemaType.NUMBER, description: "Cantidad pedida" },
           },
-          required: ["sku_code", "tango_id", "description", "cantidad"],
+          required: ["sku_code", "description", "cantidad"],
         },
       },
       shipping_address_code: {
@@ -236,7 +235,7 @@ export async function generateReply(
     const orderCall = calls.find((c) => c.name === "crear_pedido");
     if (orderCall) {
       const args = orderCall.args as {
-        items: { sku_code: string; tango_id: number; description: string; cantidad: number }[];
+        items: { sku_code: string; description: string; cantidad: number }[];
         shipping_address_code: string;
         observaciones?: string;
       };
@@ -249,12 +248,39 @@ export async function generateReply(
         };
       }
 
-      const orderItems: OrderItem[] = args.items.map((i) => ({
-        skuCode:     i.sku_code,
-        tangoId:     i.tango_id,
-        description: i.description,
-        quantity:    i.cantidad,
-      }));
+      // El historial de Chatwoot no guarda los resultados de consultar_stock, así que el
+      // modelo puede mandar SKUs inventados o la descripción. Si alguno no existe, le
+      // devolvemos el error para que consulte stock y reintente (no derivamos todavía).
+      const catalog = await findProductsBySku(args.items.map((i) => i.sku_code));
+      const unknown = args.items.filter((i) => !catalog.get(i.sku_code.trim().toUpperCase())?.tangoId);
+      if (unknown.length > 0) {
+        console.warn(`[agent] crear_pedido con SKUs desconocidos: ${unknown.map((i) => i.sku_code).join(", ")}`);
+        turns = [
+          ...turns,
+          assistantTurn,
+          {
+            role: "tool",
+            results: [{
+              id: orderCall.id,
+              name: orderCall.name,
+              result:
+                `Pedido NO creado. Estos sku_code no existen en el catálogo: ${unknown.map((i) => `"${i.sku_code}" (${i.description})`).join(", ")}. ` +
+                "Llamá consultar_stock para cada uno, usá el código exacto entre corchetes y volvé a llamar crear_pedido.",
+            }],
+          },
+        ];
+        continue;
+      }
+
+      const orderItems: OrderItem[] = args.items.map((i) => {
+        const product = catalog.get(i.sku_code.trim().toUpperCase())!;
+        return {
+          skuCode:     product.skuCode,
+          tangoId:     product.tangoId!,
+          description: i.description,
+          quantity:    i.cantidad,
+        };
+      });
 
       try {
         const orderResult = await withTimeout(
