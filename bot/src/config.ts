@@ -6,6 +6,11 @@ export const config = {
     apiKey: process.env.GEMINI_API_KEY ?? "",
     model: process.env.GEMINI_MODEL ?? "gemini-1.5-flash",
   },
+  // Respaldo cuando Gemini no responde (503, 429, etc.) después de reintentar.
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY ?? "",
+    model: process.env.ANTHROPIC_FALLBACK_MODEL ?? "claude-haiku-4-5",
+  },
   chatwoot: {
     baseUrl: process.env.CHATWOOT_BASE_URL ?? "http://rails:3000",
     // Token del Agent Bot — solo para respuestas reactivas (webhook).
@@ -37,6 +42,9 @@ export function warnMissingConfig(): void {
   if (!config.chatwoot.accessToken)  missing.push("CHATWOOT_API_ACCESS_TOKEN");
   if (!config.chatwoot.agentToken)   missing.push("CHATWOOT_AGENT_TOKEN");
   if (!config.chatwoot.accountId)    missing.push("CHATWOOT_ACCOUNT_ID");
+  if (!config.anthropic.apiKey) {
+    console.warn("[config] ANTHROPIC_API_KEY no configurado — sin respaldo de IA si Gemini falla");
+  }
   if (!config.tango.accessToken) {
     console.warn("[config] TANGO_ACCESS_TOKEN no configurado — sync con Tango desactivado");
   }

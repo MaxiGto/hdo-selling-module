@@ -4,6 +4,7 @@ export type BotEventType =
   | "derivacion_bot"
   | "derivacion_asesor"
   | "no_registrado"
+  | "fallback_ia"
   | "error";
 
 // Nunca lanza: un fallo registrando métricas no debe cortar la atención al cliente.

@@ -1,12 +1,11 @@
-import { GoogleGenerativeAI, SchemaType, type Content, type Part } from "@google/generative-ai";
-import { config } from "../config.js";
+import { SchemaType, type FunctionDeclaration } from "@google/generative-ai";
 import { buildSystemPrompt } from "./guidelines.js";
 import { fetchConversationMessages, type ChatwootMessage } from "../chatwoot/chatwootClient.js";
 import { searchStock, formatStockResults } from "./productStockRepository.js";
 import { createTangoOrder, type OrderItem } from "../tango/tangoOrderService.js";
 import { getShippingAddresses } from "../contacts/contactRepository.js";
-
-const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
+import { logBotEvent } from "../metrics/botEventsRepository.js";
+import { createModelStepper, LlmUnavailableError, type Turn } from "./llmClient.js";
 
 export type AgentResult =
   | { type: "reply"; content: string }
@@ -101,38 +100,33 @@ const TOOL_STOCK: any = {
   },
 };
 
-function buildTools(orderCreationEnabled: boolean) {
+function buildTools(orderCreationEnabled: boolean): FunctionDeclaration[] {
   const declarations = [TOOL_DERIVAR];
   if (orderCreationEnabled) {
     declarations.push(TOOL_DIRECCIONES);
     declarations.push(TOOL_CREAR_PEDIDO);
   }
   declarations.push(TOOL_STOCK);
-  return [{ functionDeclarations: declarations }];
+  return declarations;
 }
 
-// Convierte el historial de Chatwoot al formato Content de Gemini.
+// Convierte el historial de Chatwoot a turnos neutrales (ver llmClient.ts).
 // Colapsa mensajes consecutivos del mismo rol (WhatsApp permite ráfagas multi-mensaje).
-function buildContents(history: ChatwootMessage[]): Content[] {
-  const raw: Content[] = history.map((m) => ({
-    role: m.message_type === 0 ? "user" : "model",
-    parts: [{ text: m.content!.trim() }],
-  }));
-
-  const collapsed: Content[] = [];
-  for (const msg of raw) {
+function buildTurns(history: ChatwootMessage[]): Turn[] {
+  const collapsed: Turn[] = [];
+  for (const m of history) {
+    const role = m.message_type === 0 ? "user" : "assistant";
+    const text = m.content!.trim();
     const last = collapsed[collapsed.length - 1];
-    if (last?.role === msg.role) {
-      const lastText = (last.parts[last.parts.length - 1] as { text: string }).text;
-      const msgText = (msg.parts[0] as { text: string }).text;
-      last.parts[last.parts.length - 1] = { text: `${lastText}\n${msgText}` };
+    if (last && last.role !== "tool" && last.role === role) {
+      last.text = `${last.text}\n${text}`;
     } else {
-      collapsed.push({ role: msg.role, parts: [...msg.parts] });
+      collapsed.push(role === "user" ? { role, text } : { role, text, calls: [] });
     }
   }
 
-  // Gemini requiere que el primer mensaje sea del usuario
-  while (collapsed.length > 0 && collapsed[0].role === "model") {
+  // Gemini y Claude requieren que el primer mensaje sea del usuario
+  while (collapsed.length > 0 && collapsed[0].role !== "user") {
     collapsed.shift();
   }
 
@@ -161,33 +155,53 @@ export async function generateReply(
   const systemPrompt = buildSystemPrompt(clientCategory ?? null, orderEnabled);
   const tools = buildTools(orderEnabled);
 
-  const model = genAI.getGenerativeModel({
-    model: config.gemini.model,
-    systemInstruction: systemPrompt,
-    tools,
+  const step = createModelStepper(systemPrompt, tools, (reason) => {
+    void logBotEvent("fallback_ia", {
+      conversationId,
+      chatwootContactId: chatwootContactId ?? null,
+      detail: reason,
+    });
   });
 
   const history = await fetchConversationMessages(conversationId, 30);
-  let contents = buildContents(history);
+  let turns = buildTurns(history);
 
-  if (contents.length === 0 || contents[contents.length - 1].role !== "user") {
-    contents = [{ role: "user", parts: [{ text: currentMessage }] }];
+  if (turns.length === 0 || turns[turns.length - 1].role !== "user") {
+    turns = [{ role: "user", text: currentMessage }];
   }
+
+  // Si el pedido ya se creó y después falla la IA, el asesor tiene que saberlo.
+  let createdOrderId: string | null = null;
 
   // Máximo 10 iteraciones para evitar loops infinitos
   for (let i = 0; i < 10; i++) {
-    const result = await model.generateContent({ contents });
-    const candidate = result.response.candidates?.[0];
-    const parts: Part[] = candidate?.content?.parts ?? [];
+    let modelStep;
+    try {
+      modelStep = await step(turns);
+    } catch (err) {
+      if (!(err instanceof LlmUnavailableError)) throw err;
+      console.error(`[agent] conv. ${conversationId}: ${err.message}`);
+      return {
+        type: "handoff",
+        motivo: createdOrderId
+          ? `IA no disponible después de crear el pedido ${createdOrderId}`
+          : "IA no disponible (Gemini y Claude)",
+        mensaje: "Estamos con una demora técnica, te paso con un asesor para que te ayude 🙌",
+      };
+    }
 
-    const functionCallParts = parts.filter((p) => "functionCall" in p && p.functionCall);
+    const { calls } = modelStep;
+    const assistantTurn: Turn = {
+      role: "assistant",
+      text: modelStep.text,
+      calls,
+      geminiParts: modelStep.geminiParts,
+    };
 
     // Derivación tiene prioridad
-    const handoffPart = functionCallParts.find(
-      (p) => "functionCall" in p && p.functionCall?.name === "derivar_a_asesor",
-    );
-    if (handoffPart && "functionCall" in handoffPart && handoffPart.functionCall) {
-      const args = handoffPart.functionCall.args as { motivo: string; mensaje: string };
+    const handoffCall = calls.find((c) => c.name === "derivar_a_asesor");
+    if (handoffCall) {
+      const args = handoffCall.args as { motivo?: string; mensaje?: string };
       return {
         type: "handoff",
         motivo: args.motivo ?? "sin motivo",
@@ -196,10 +210,8 @@ export async function generateReply(
     }
 
     // Direcciones de envío del cliente
-    const addressPart = functionCallParts.find(
-      (p) => "functionCall" in p && p.functionCall?.name === "obtener_direcciones_envio",
-    );
-    if (addressPart && chatwootContactId) {
+    const addressCall = calls.find((c) => c.name === "obtener_direcciones_envio");
+    if (addressCall && chatwootContactId) {
       const addresses = await getShippingAddresses(chatwootContactId);
       let addressText: string;
       if (addresses.length === 0) {
@@ -212,28 +224,18 @@ export async function generateReply(
         });
         addressText = `Direcciones de envío disponibles:\n${lines.join("\n")}`;
       }
-      contents = [
-        ...contents,
-        { role: "model" as const, parts },
-        {
-          role: "user" as const,
-          parts: [{
-            functionResponse: {
-              name: "obtener_direcciones_envio",
-              response: { result: addressText },
-            },
-          } as Part],
-        },
+      turns = [
+        ...turns,
+        assistantTurn,
+        { role: "tool", results: [{ id: addressCall.id, name: addressCall.name, result: addressText }] },
       ];
       continue;
     }
 
     // Creación de pedido en Tango
-    const orderPart = functionCallParts.find(
-      (p) => "functionCall" in p && p.functionCall?.name === "crear_pedido",
-    );
-    if (orderPart && "functionCall" in orderPart && orderPart.functionCall) {
-      const args = orderPart.functionCall.args as {
+    const orderCall = calls.find((c) => c.name === "crear_pedido");
+    if (orderCall) {
+      const args = orderCall.args as {
         items: { sku_code: string; tango_id: number; description: string; cantidad: number }[];
         shipping_address_code: string;
         observaciones?: string;
@@ -259,22 +261,15 @@ export async function generateReply(
           createTangoOrder(chatwootContactId, orderItems, args.observaciones, args.shipping_address_code),
           30_000,
         );
+        if (orderResult.success) createdOrderId = String(orderResult.orderId);
         const responseText = orderResult.success
           ? `Pedido registrado exitosamente (ID: ${orderResult.orderId})`
           : `Error al registrar pedido: ${orderResult.error}`;
 
-        contents = [
-          ...contents,
-          { role: "model" as const, parts },
-          {
-            role: "user" as const,
-            parts: [{
-              functionResponse: {
-                name: "crear_pedido",
-                response: { result: responseText },
-              },
-            } as Part],
-          },
+        turns = [
+          ...turns,
+          assistantTurn,
+          { role: "tool", results: [{ id: orderCall.id, name: orderCall.name, result: responseText }] },
         ];
         continue;
       } catch (err) {
@@ -288,23 +283,15 @@ export async function generateReply(
     }
 
     // Consultas de stock (pueden ser varias en paralelo)
-    const stockParts = functionCallParts.filter(
-      (p) => "functionCall" in p && p.functionCall?.name === "consultar_stock",
-    );
-    if (stockParts.length > 0) {
-      let toolResponseParts: Part[];
+    const stockCalls = calls.filter((c) => c.name === "consultar_stock");
+    if (stockCalls.length > 0) {
+      let results: { id: string; name: string; result: string }[];
       try {
-        toolResponseParts = await Promise.all(
-          stockParts.map(async (p) => {
-            if (!("functionCall" in p) || !p.functionCall) throw new Error("invalid part");
-            const { query, cantidad } = p.functionCall.args as { query: string; cantidad?: number };
-            const results = await withTimeout(searchStock(query), 60_000);
-            return {
-              functionResponse: {
-                name: "consultar_stock",
-                response: { result: formatStockResults(query, results, cantidad) },
-              },
-            } as Part;
+        results = await Promise.all(
+          stockCalls.map(async (c) => {
+            const { query, cantidad } = c.args as { query: string; cantidad?: number };
+            const found = await withTimeout(searchStock(query), 60_000);
+            return { id: c.id, name: c.name, result: formatStockResults(query, found, cantidad) };
           }),
         );
       } catch (err) {
@@ -316,23 +303,14 @@ export async function generateReply(
         };
       }
 
-      contents = [
-        ...contents,
-        { role: "model" as const, parts },
-        { role: "user" as const, parts: toolResponseParts },
-      ];
+      turns = [...turns, assistantTurn, { role: "tool", results }];
       continue;
     }
 
     // Sin herramientas → respuesta de texto final
-    const text = parts
-      .map((p) => ("text" in p ? p.text : ""))
-      .join("")
-      .trim();
-
     return {
       type: "reply",
-      content: text || "Disculpá, no pude generar una respuesta. Te paso con un asesor.",
+      content: modelStep.text || "Disculpá, no pude generar una respuesta. Te paso con un asesor.",
     };
   }
 
