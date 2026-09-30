@@ -125,6 +125,17 @@ CREATE TABLE IF NOT EXISTS campaign_weekly_limit (
   iso_week      TEXT NOT NULL,
   PRIMARY KEY (contact_id, template_name, iso_week)
 );
+
+-- Log histórico de eventos del bot para métricas (la tabla handoffs se vacía cada noche).
+CREATE TABLE IF NOT EXISTS bot_events (
+  id                  SERIAL PRIMARY KEY,
+  event_type          TEXT NOT NULL,
+  conversation_id     INTEGER,
+  chatwoot_contact_id INTEGER,
+  detail              TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS bot_events_type_created_idx ON bot_events (event_type, created_at);
 `;
 
 export async function runMigrations(): Promise<void> {

@@ -4,6 +4,7 @@ import { isHandedOff, markHandedOff } from "../agent/handoffRepository.js";
 import { sendMessage, openConversation } from "../chatwoot/chatwootClient.js";
 import { resetNoResponseStreak, getCategoryByChatwootId, isOrderCreationEnabled, isRegisteredContact, wasUnregisteredTemplateSentToday, markUnregisteredTemplateSent } from "../contacts/contactRepository.js";
 import { TEMPLATE_CLIENTE_NUEVO } from "../agent/templates.js";
+import { logBotEvent } from "../metrics/botEventsRepository.js";
 
 // Idempotencia básica: evita procesar el mismo message.id dos veces en el mismo proceso.
 const processedMessageIds = new Set<number>();
@@ -32,9 +33,18 @@ async function processEvent(payload: any): Promise<void> {
         if (typeof outgoingConvId === "number") {
           console.log(`[bot] mensaje outgoing en conv. ${outgoingConvId} — sender:`, JSON.stringify(payload?.sender));
           const senderType: unknown = payload?.sender?.type;
-          if (senderType === "user" || senderType === "agent") {
+          // Las plantillas (difusiones) salen con el token de un usuario pero no son un asesor atendiendo.
+          const isTemplate = Boolean(payload?.additional_attributes?.template_params);
+          if (isTemplate) {
+            console.log(`[bot] conv. ${outgoingConvId} — plantilla saliente, no se marca como derivada`);
+          } else if (senderType === "user" || senderType === "agent") {
             if (!await isHandedOff(outgoingConvId)) {
               await markHandedOff(outgoingConvId, "asesor tomó la conversación");
+              void logBotEvent("derivacion_asesor", {
+                conversationId: outgoingConvId,
+                chatwootContactId: payload?.conversation?.meta?.sender?.id ?? null,
+                detail: typeof payload?.sender?.name === "string" ? payload.sender.name : null,
+              });
               console.log(`[bot] conv. ${outgoingConvId} — asesor envió mensaje, marcando como derivada`);
             }
           }
@@ -92,6 +102,11 @@ async function processEvent(payload: any): Promise<void> {
       const registered = await isRegisteredContact(chatwootContactId);
       if (!registered) {
         const alreadySentToday = await wasUnregisteredTemplateSentToday(chatwootContactId);
+        void logBotEvent("no_registrado", {
+          conversationId,
+          chatwootContactId,
+          detail: alreadySentToday ? "ignorado" : "template_enviado",
+        });
         if (!alreadySentToday) {
           console.log(`[bot] conv. ${conversationId} — cliente no registrado (chatwootId=${chatwootContactId}), enviando template de alta`);
           await sendMessage(conversationId, TEMPLATE_CLIENTE_NUEVO);
@@ -108,6 +123,11 @@ async function processEvent(payload: any): Promise<void> {
     if (result.type === "handoff") {
       await sendMessage(conversationId, result.mensaje);
       await markHandedOff(conversationId, result.motivo);
+      void logBotEvent("derivacion_bot", {
+        conversationId,
+        chatwootContactId: typeof chatwootContactId === "number" ? chatwootContactId : null,
+        detail: result.motivo,
+      });
       console.log(`[bot] conv. ${conversationId} derivada: ${result.motivo}`);
     } else {
       await sendMessage(conversationId, result.content);
@@ -115,5 +135,12 @@ async function processEvent(payload: any): Promise<void> {
     }
   } catch (err) {
     console.error("[bot] error procesando evento:", err);
+    const convId: unknown = payload?.conversation?.id;
+    const contactId: unknown = payload?.conversation?.meta?.sender?.id;
+    void logBotEvent("error", {
+      conversationId: typeof convId === "number" ? convId : null,
+      chatwootContactId: typeof contactId === "number" ? contactId : null,
+      detail: (err instanceof Error ? err.message : String(err)).slice(0, 500),
+    });
   }
 }

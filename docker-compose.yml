@@ -104,6 +104,8 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - DATABASE_URL=postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@postgres:5432/oasisbot
+      # Lectura de la base de Chatwoot para /metrics (la conexión se abre en modo solo lectura).
+      - CHATWOOT_DATABASE_URL=postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DATABASE}
       - TANGO_API_BASE_URL=${TANGO_API_BASE_URL}
       - TANGO_ACCESS_TOKEN=${TANGO_ACCESS_TOKEN}
       - TANGO_PAGE_SIZE=${TANGO_PAGE_SIZE}
