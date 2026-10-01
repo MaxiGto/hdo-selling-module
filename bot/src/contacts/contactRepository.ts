@@ -26,19 +26,22 @@ const DELIVERY_COL: Record<DeliveryDay, string> = {
 };
 
 // Contactos que tienen delivery en el día indicado, aptos para recibir la difusión.
+// Una sola difusión por celular: los perfiles C y X de un cliente comparten número; se elige el C.
 export async function getAudienceByDeliveryDay(day: DeliveryDay): Promise<Contact[]> {
   const col = DELIVERY_COL[day];
   const { rows } = await pool.query<{
     id: number; tango_id: string; name: string; phone_normalized: string;
     seller_code: string | null; chatwoot_contact_id: number | null; opt_out: boolean;
   }>(
-    `SELECT id, tango_id, name, phone_normalized, seller_code,
+    `SELECT DISTINCT ON (phone_normalized)
+            id, tango_id, name, phone_normalized, seller_code,
             chatwoot_contact_id, opt_out
      FROM contacts
      WHERE ${col} = TRUE
        AND opt_out = FALSE
        AND phone_normalized IS NOT NULL
-       AND phone_normalized <> ''`,
+       AND phone_normalized <> ''
+     ORDER BY phone_normalized, (tango_id LIKE 'C%') DESC, tango_id`,
   );
   return rows.map((r) => ({
     id: r.id,
@@ -270,8 +273,8 @@ export async function getContactForOrder(chatwootContactId: number): Promise<Con
 }
 
 // Chatwoot contact IDs habilitados para crear pedidos (beta).
-// 8608 = Maxi GT, 11390 = Sabrina Barrionuevo.
-const ORDER_CREATION_BETA_IDS = new Set([8608, 11390, 14282, 11494]);
+// 14282 = Maxi GT (CPR030), 11390 y 14412 = Sabrina Barrionuevo (CBA104), 11494 = CAN039.
+const ORDER_CREATION_BETA_IDS = new Set([11390, 14282, 11494, 14412]);
 
 export function isOrderCreationEnabled(chatwootContactId: number): boolean {
   return ORDER_CREATION_BETA_IDS.has(chatwootContactId);
@@ -350,10 +353,13 @@ export async function linkChatwootContact(
     ));
   }
   if (rows.length === 0) return { status: "not_found" };
-  if (rows.length > 1) return { status: "ambiguous", tangoIds: rows.map((r) => r.tango_id) };
+  // Un mismo cliente suele tener perfil C (factura) y X (remito) con el mismo celular: se atiende como C.
+  const cProfiles = rows.filter((r) => r.tango_id.startsWith("C"));
+  const match = rows.length === 1 ? rows[0] : cProfiles.length === 1 ? cProfiles[0] : null;
+  if (!match) return { status: "ambiguous", tangoIds: rows.map((r) => r.tango_id) };
 
-  await pool.query(`UPDATE contacts SET chatwoot_contact_id = $1 WHERE id = $2`, [chatwootContactId, rows[0].id]);
-  return { status: "linked", tangoId: rows[0].tango_id, previousId: rows[0].chatwoot_contact_id };
+  await pool.query(`UPDATE contacts SET chatwoot_contact_id = $1 WHERE id = $2`, [chatwootContactId, match.id]);
+  return { status: "linked", tangoId: match.tango_id, previousId: match.chatwoot_contact_id };
 }
 
 // Guarda el ID de Chatwoot una vez que se crea el contacto allá.
