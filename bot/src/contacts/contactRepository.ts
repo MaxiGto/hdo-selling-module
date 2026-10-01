@@ -322,6 +322,40 @@ export async function isRegisteredContact(chatwootContactId: number): Promise<bo
   return rows[0]?.exists ?? false;
 }
 
+export type LinkResult =
+  | { status: "linked"; tangoId: string; previousId: number | null }
+  | { status: "not_found" }
+  | { status: "ambiguous"; tangoIds: string[] };
+
+// Vincula un contacto de Chatwoot todavía sin vincular con su cliente del bot:
+// primero por identificador (código de Tango), después por celular normalizado.
+// Si el celular lo comparten varios clientes no vincula: el bot no sabría a cuál atiende.
+export async function linkChatwootContact(
+  chatwootContactId: number,
+  identifier: string | null,
+  phoneNormalized: string | null,
+): Promise<LinkResult> {
+  type Row = { id: number; tango_id: string; chatwoot_contact_id: number | null };
+  let rows: Row[] = [];
+  if (identifier) {
+    ({ rows } = await pool.query<Row>(
+      `SELECT id, tango_id, chatwoot_contact_id FROM contacts WHERE tango_id = $1`,
+      [identifier],
+    ));
+  }
+  if (rows.length === 0 && phoneNormalized) {
+    ({ rows } = await pool.query<Row>(
+      `SELECT id, tango_id, chatwoot_contact_id FROM contacts WHERE phone_normalized = $1`,
+      [phoneNormalized],
+    ));
+  }
+  if (rows.length === 0) return { status: "not_found" };
+  if (rows.length > 1) return { status: "ambiguous", tangoIds: rows.map((r) => r.tango_id) };
+
+  await pool.query(`UPDATE contacts SET chatwoot_contact_id = $1 WHERE id = $2`, [chatwootContactId, rows[0].id]);
+  return { status: "linked", tangoId: rows[0].tango_id, previousId: rows[0].chatwoot_contact_id };
+}
+
 // Guarda el ID de Chatwoot una vez que se crea el contacto allá.
 export async function setChatwootContactId(
   contactId: number,

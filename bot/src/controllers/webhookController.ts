@@ -2,7 +2,8 @@ import type { Request, Response } from "express";
 import { generateReply } from "../agent/agentService.js";
 import { isHandedOff, markHandedOff } from "../agent/handoffRepository.js";
 import { sendMessage, openConversation } from "../chatwoot/chatwootClient.js";
-import { resetNoResponseStreak, getCategoryByChatwootId, isOrderCreationEnabled, isRegisteredContact, wasUnregisteredTemplateSentToday, markUnregisteredTemplateSent } from "../contacts/contactRepository.js";
+import { resetNoResponseStreak, getCategoryByChatwootId, isOrderCreationEnabled, isRegisteredContact, wasUnregisteredTemplateSentToday, markUnregisteredTemplateSent, linkChatwootContact } from "../contacts/contactRepository.js";
+import { normalizeArgentinePhone } from "../sync/tangoClient.js";
 import { TEMPLATE_CLIENTE_NUEVO } from "../agent/templates.js";
 import { logBotEvent } from "../metrics/botEventsRepository.js";
 
@@ -14,6 +15,28 @@ const processedMessageIds = new Set<number>();
 export function handleChatwootWebhook(req: Request, res: Response): void {
   res.sendStatus(200);
   void processEvent(req.body);
+}
+
+// Un cliente de Tango que escribe sin estar vinculado a su contacto de Chatwoot
+// (nunca recibió una difusión) se vincula acá por código o celular.
+async function tryLinkContact(
+  chatwootContactId: number,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sender: any,
+  conversationId: number,
+): Promise<boolean> {
+  const identifier = typeof sender?.identifier === "string" && sender.identifier ? sender.identifier : null;
+  const phone = typeof sender?.phone_number === "string" ? normalizeArgentinePhone(sender.phone_number) : null;
+  const result = await linkChatwootContact(chatwootContactId, identifier, phone);
+  if (result.status === "linked") {
+    const prev = result.previousId ? ` (antes ${result.previousId})` : "";
+    console.log(`[bot] conv. ${conversationId} — contacto ${chatwootContactId} vinculado a ${result.tangoId}${prev}`);
+    return true;
+  }
+  if (result.status === "ambiguous") {
+    console.warn(`[bot] conv. ${conversationId} — celular ${phone} compartido por ${result.tangoIds.join(", ")}, no se vincula`);
+  }
+  return false;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -70,10 +93,14 @@ async function processEvent(payload: any): Promise<void> {
     openConversation(conversationId);
 
     // El cliente respondió → resetear streak de no-respuesta + identificar categoría
-    const chatwootContactId = payload?.conversation?.meta?.sender?.id;
+    const sender = payload?.conversation?.meta?.sender;
+    const chatwootContactId = sender?.id;
     let clientCategory: string | null = null;
     let orderCreationEnabled = false;
+    let registered = false;
     if (typeof chatwootContactId === "number") {
+      registered = await isRegisteredContact(chatwootContactId)
+        || await tryLinkContact(chatwootContactId, sender, conversationId);
       void resetNoResponseStreak(chatwootContactId);
       clientCategory = await getCategoryByChatwootId(chatwootContactId);
       orderCreationEnabled = isOrderCreationEnabled(chatwootContactId);
@@ -99,7 +126,6 @@ async function processEvent(payload: any): Promise<void> {
     // Cliente no registrado en la DB del bot (no está en Tango) → mensaje de alta, sin AI
     // Rate-limit: se envía como máximo 1 vez por día para no ser molesto.
     if (typeof chatwootContactId === "number") {
-      const registered = await isRegisteredContact(chatwootContactId);
       if (!registered) {
         const alreadySentToday = await wasUnregisteredTemplateSentToday(chatwootContactId);
         void logBotEvent("no_registrado", {
