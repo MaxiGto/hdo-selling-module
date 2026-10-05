@@ -65,6 +65,11 @@ interface OrderContext {
   comment: string | null;
 }
 
+// Talonarios de pedido en Tango: 25 (letra A) para factura con IVA, 95 (letra X) para remito sin IVA.
+// Si no se informa, Tango usa el de la configuración de la tienda (25), también para los remitos.
+const TALONARIO_FACTURA = 25;
+const TALONARIO_REMITO = 95;
+
 function buildOrderBody(
   ctx: OrderContext,
   items: OrderItem[],
@@ -96,6 +101,7 @@ function buildOrderBody(
     WarehouseCode:     "1",
     SellerCode:        ctx.sellerCode ?? "OA",
     SaleConditionCode: 19,
+    OrderCounterfoil:  applyIva ? TALONARIO_FACTURA : TALONARIO_REMITO,
     PriceListNumber:   ctx.priceList,
     ValidateTotalWithPaidTotal: false,
     ValidateTotalWithItems:     false,
@@ -139,7 +145,7 @@ async function sendOrder(
 ): Promise<{ success: boolean; orderId?: string; error?: string }> {
   const body = buildOrderBody(ctx, items, priceMap, customerCode, applyIva, orderId);
   const bodyJson = JSON.stringify(body);
-  console.log(`[order] enviando pedido ${orderId} (${applyIva ? "con IVA" : "sin IVA"}, code=${customerCode}):\n${bodyJson}`);
+  console.log(`[order] enviando pedido ${orderId} (${applyIva ? "con IVA" : "sin IVA"}, code=${customerCode}, talonario=${body.OrderCounterfoil}):\n${bodyJson}`);
 
   const res = await fetch(`${config.tango.baseUrl}/api/Aperture/order`, {
     method:  "POST",

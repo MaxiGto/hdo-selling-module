@@ -56,11 +56,21 @@ async function cw(kind: keyof typeof MIN_GAP_MS, path: string, init?: RequestIni
   }
 }
 
-async function contactExists(id: number): Promise<boolean> {
+async function getContact(id: number): Promise<CWContact | null> {
   const res = await cw("get", `/contacts/${id}`);
-  if (res.status === 404) return false;
+  if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GET contacto ${id} → ${res.status}`);
-  return true;
+  const body = (await res.json()) as { payload?: CWContact };
+  if (!body.payload) throw new Error(`GET contacto ${id}: respuesta sin payload`);
+  return body.payload;
+}
+
+async function updateNameAndIdentifier(id: number, name: string, identifier: string): Promise<void> {
+  const res = await cw("write", `/contacts/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name, identifier }),
+  });
+  if (!res.ok) throw new Error(`actualizar nombre de ${id} → ${res.status}: ${await res.text()}`);
 }
 
 async function search(q: string): Promise<CWContact[]> {
@@ -139,6 +149,7 @@ async function run() {
   console.log(`[relink] ${contacts.length} contactos con teléfono en la DB del bot`);
 
   let ok = 0, linked = 0, created = 0, reassigned = 0, xUnlinked = 0, xSkipped = 0;
+  const renamed: string[] = [];
   const normalized: string[] = [];
   const invalid: string[] = [];
   const duplicates: string[] = [];
@@ -165,6 +176,13 @@ async function run() {
   const owner = new Map<number, BotContact>();
   for (const c of contacts) if (c.chatwoot_contact_id) owner.set(c.chatwoot_contact_id, c);
 
+  // El contacto de Chatwoot lleva el nombre y el código de Tango, para encontrarlo buscando por código.
+  async function alignName(c: BotContact, cwContact: CWContact) {
+    if (cwContact.name === c.name && cwContact.identifier === c.tango_id) return;
+    renamed.push(`${cwContact.id}: "${cwContact.name}" → "${c.name}"`);
+    if (APPLY) await updateNameAndIdentifier(cwContact.id, c.name, c.tango_id);
+  }
+
   // 2. Revisión contacto por contacto (los C se procesan antes que los X por el orden alfabético).
   for (const c of contacts) {
     try {
@@ -175,7 +193,12 @@ async function run() {
       }
 
       if (c.chatwoot_contact_id) {
-        if (await contactExists(c.chatwoot_contact_id)) { ok++; continue; }
+        const current = await getContact(c.chatwoot_contact_id);
+        if (current) {
+          ok++;
+          await alignName(c, current);
+          continue;
+        }
         console.log(`[relink] ${c.tango_id}: el ID ${c.chatwoot_contact_id} ya no existe en Chatwoot`);
         owner.delete(c.chatwoot_contact_id);
         await setLink(c, null);
@@ -224,6 +247,7 @@ async function run() {
       }
       await setLink(c, best.id);
       owner.set(best.id, c);
+      await alignName(c, best);
     } catch (err) {
       errors.push(`${c.tango_id}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -237,6 +261,8 @@ async function run() {
   console.log(`  Contacto pasado del perfil X a su perfil C: ${reassigned}`);
   console.log(`  Perfiles X desvinculados (compartían contacto con su C): ${xUnlinked}`);
   console.log(`  Perfiles X sin vincular porque existe su C: ${xSkipped}`);
+  console.log(`  Contactos de Chatwoot con nombre/código de Tango ${APPLY ? "actualizados" : "a actualizar"}: ${renamed.length}`);
+  renamed.forEach((r) => console.log(`    - ${r}`));
   console.log(`  Celulares corregidos de formato en la DB del bot: ${normalized.length}`);
   normalized.forEach((n) => console.log(`    - ${n}`));
   console.log(`  Celulares inválidos (corregir en Tango): ${invalid.length}`);
