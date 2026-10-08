@@ -271,7 +271,13 @@ export async function createTangoOrder(
     if (!resultF.success) return resultF;
 
     const resultR = await sendOrder(ctx, remitoItems, priceMap, codeX, false, orderIdR);
-    if (!resultR.success) return resultR;
+    if (!resultR.success) {
+      return {
+        success: false,
+        orderId: orderIdF,
+        error: `el pedido de factura ${orderIdF} SÍ se creó, falló el de remito: ${resultR.error}`,
+      };
+    }
 
     return { success: true, orderId: orderIdF, orderId2: orderIdR };
   }

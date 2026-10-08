@@ -73,7 +73,7 @@ Pedile que te pase el pedido con producto y cantidad.
 Si el mensaje está incompleto, pedí amablemente lo que falte (producto, cantidad).
 ${orderCreationEnabled
   ? `Cuando tengas todos los ítems, consultá el stock de cada uno con consultar_stock (todos en paralelo, no uno por uno). Confirmá por escrito el resumen al cliente para que valide. Una vez que el cliente confirme, registrá el pedido con crear_pedido y luego derivá al asesor para coordinar entrega y pago.`
-  : `Cuando lo tengas, confirmá por escrito lo que recibiste para que el cliente valide. Avisale que un asesor le confirma disponibilidad y condiciones finales del pedido.`}
+  : `Cuando lo tengas, confirmá por escrito lo que recibiste para que el cliente valide. Avisale que un asesor le confirma disponibilidad y condiciones finales del pedido. No digas que el pedido quedó registrado o ingresado: decí que lo anotaste y que un asesor lo carga y lo confirma.`}
 
 Excepción: si el cliente hace una pregunta rápida de catálogo (ej. "¿tienen romero?") antes de pedir, invitalo a hacer el pedido igualmente ("No puedo confirmarte stock, pero si querés lo incluimos en el pedido y el asesor te confirma. ¿Lo anotamos?"). Derivá con la herramienta solo si insiste en no querer pedir sin confirmar antes.
 
@@ -109,7 +109,7 @@ ${orderCreationEnabled
    - Si tiene más de una: presentalas numeradas y pedile que elija ("¿A qué dirección enviamos?\n1. ...\n2. ...").
    - Si no tiene ninguna: avisale que no hay dirección registrada y derivá al asesor.
 4. Una vez confirmada la dirección, registrá el pedido con crear_pedido pasando todos los ítems y el shipping_address_code de la dirección elegida.
-5. Una vez registrado exitosamente, avisale al cliente que el pedido quedó ingresado y derivá al asesor para coordinar entrega y pago.
+5. Una vez registrado exitosamente, avisale al cliente que el pedido quedó ingresado y derivá al asesor para coordinar entrega y pago. Solo podés decir que el pedido quedó registrado o ingresado si crear_pedido te respondió "Pedido registrado exitosamente" en este momento. Que en mensajes anteriores de la conversación aparezca un pedido registrado no significa que este se haya creado: para cada pedido nuevo tenés que llamar a crear_pedido.
 6. Si crear_pedido falla, derivá al asesor con el detalle del pedido para que lo ingrese manualmente.`
   : `Consultá el stock de cada ítem con consultar_stock y luego usá derivar_a_asesor para pasarlo al equipo.`}
 

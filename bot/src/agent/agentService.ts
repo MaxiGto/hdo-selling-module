@@ -141,6 +141,27 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
+// Frases en las que la IA da por hecho que el pedido quedó cargado ("tu pedido ya fue registrado",
+// "quedó ingresado tu pedido", "ya cargué tu pedido"). No toma futuros ni condicionales ("queda registrado
+// cuando confirmes"), que son parte normal de la conversación.
+const ORDER_CLAIM_PATTERNS = [
+  /\bpedido\b[^.!?\n]{0,60}?\b(ya\s+)?(fue|qued[oó]|est[aá]|ha\s+sido)\s+(correctamente\s+|exitosamente\s+|bien\s+)?(registrad|ingresad|cargad|cread|generad|procesad)[oa]s?\b/i,
+  /\b(fue|qued[oó]|est[aá])\s+(correctamente\s+|exitosamente\s+)?(registrad|ingresad|cargad|cread|generad)[oa]\s+(tu|el)\s+pedido\b/i,
+  /\b(registr[eé]|ingres[eé]|cargu[eé]|cre[eé]|gener[eé])\s+(tu|el)\s+pedido\b/i,
+];
+
+export function claimsOrderRegistered(text: string): boolean {
+  return ORDER_CLAIM_PATTERNS.some((re) => re.test(text));
+}
+
+// Aviso interno (el cliente no lo ve) cuando la IA afirma un pedido que no creó.
+const ORDER_CLAIM_CORRECTION =
+  "Aviso del sistema (el cliente no ve este mensaje): tu último mensaje decía que el pedido quedó registrado, " +
+  "pero no llamaste a crear_pedido, así que el pedido NO existe en Tango y ese mensaje no se le envió al cliente. " +
+  "Si el cliente ya confirmó los productos y la dirección de envío, llamá ahora a crear_pedido " +
+  "(antes llamá a obtener_direcciones_envio si no tenés el shipping_address_code). " +
+  "Si falta confirmar algo, preguntáselo al cliente sin decir que el pedido está registrado.";
+
 // Genera la respuesta del agente con historial completo de la conversación.
 // Loop agentic: el modelo puede llamar consultar_stock N veces antes de responder.
 export async function generateReply(
@@ -171,6 +192,7 @@ export async function generateReply(
 
   // Si el pedido ya se creó y después falla la IA, el asesor tiene que saberlo.
   let createdOrderId: string | null = null;
+  let orderClaimCorrected = false;
 
   // Máximo 10 iteraciones para evitar loops infinitos
   for (let i = 0; i < 10; i++) {
@@ -287,10 +309,19 @@ export async function generateReply(
           createTangoOrder(chatwootContactId, orderItems, args.observaciones, args.shipping_address_code),
           30_000,
         );
-        if (orderResult.success) createdOrderId = String(orderResult.orderId);
-        const responseText = orderResult.success
-          ? `Pedido registrado exitosamente (ID: ${orderResult.orderId})`
-          : `Error al registrar pedido: ${orderResult.error}`;
+        // Si Tango rechaza el pedido se deriva acá: no se deja a la IA decidir qué contestar,
+        // porque puede responder que salió bien.
+        if (!orderResult.success) {
+          const resumen = orderItems.map((i) => `${i.quantity} x ${i.description}`).join(", ");
+          console.error(`[agent] conv. ${conversationId}: crear_pedido falló: ${orderResult.error}`);
+          return {
+            type: "handoff",
+            motivo: `Pedido NO creado en Tango (${orderResult.error}). Ítems: ${resumen}`,
+            mensaje: "Tuve un problema al cargar tu pedido en el sistema. Te paso con un asesor para que lo ingrese y te confirme 🙌",
+          };
+        }
+        createdOrderId = String(orderResult.orderId);
+        const responseText = `Pedido registrado exitosamente (ID: ${orderResult.orderId})`;
 
         turns = [
           ...turns,
@@ -333,7 +364,26 @@ export async function generateReply(
       continue;
     }
 
-    // Sin herramientas → respuesta de texto final
+    // Sin herramientas → respuesta de texto final.
+    // La IA puede afirmar que registró un pedido sin haber llamado a crear_pedido. Ese texto no se manda:
+    // si puede crear pedidos, se le avisa una vez para que lo cree; si insiste o no puede, se deriva.
+    if (!createdOrderId && claimsOrderRegistered(modelStep.text)) {
+      const claimed = modelStep.text.slice(0, 200);
+      if (orderEnabled && !orderClaimCorrected) {
+        orderClaimCorrected = true;
+        console.warn(`[agent] conv. ${conversationId}: la IA (${modelStep.provider}) afirmó un pedido que no se creó, se le da una segunda oportunidad. Texto: ${claimed}`);
+        turns = [...turns, assistantTurn, { role: "user", text: ORDER_CLAIM_CORRECTION }];
+        continue;
+      }
+      console.warn(`[agent] conv. ${conversationId}: la IA (${modelStep.provider}) afirmó un pedido que no se creó, se deriva. Texto: ${claimed}`);
+      return {
+        type: "handoff",
+        motivo: orderEnabled
+          ? "La IA dijo que el pedido quedó registrado pero no se creó en Tango: cargarlo manualmente"
+          : "Pedido tomado por chat: cargarlo manualmente",
+        mensaje: "¡Gracias! Ya tengo tu pedido anotado. Te paso con un asesor para que lo cargue y te confirme 🙌",
+      };
+    }
     return {
       type: "reply",
       content: modelStep.text || "Disculpá, no pude generar una respuesta. Te paso con un asesor.",
